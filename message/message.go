@@ -1,0 +1,114 @@
+package message
+
+import (
+	"encoding/json"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"github.com/go-chi/render"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
+)
+
+type Message interface {
+	Text(string) Message
+	ToMap() map[string]interface{}
+	ToJSON() []byte
+	Write(w http.ResponseWriter, r *http.Request)
+	Error() string
+	IsError() bool
+	Is400() bool
+	Is500() bool
+	Set(key string, val interface{}) Message
+	Get(key string) interface{}
+	Add(msgs ...Message) Message
+}
+
+type Msg struct {
+	Message    string
+	Status     int
+	Properties map[string]interface{}
+}
+
+func (m *Msg) Text(text string) Message {
+	m.Message = text
+	return m
+}
+
+func (m *Msg) ToMap() map[string]interface{} {
+	mp := gin.H{"message": m.Message}
+	if m.Properties != nil {
+		for k, v := range m.Properties {
+			mp[k] = v
+		}
+	}
+	return mp
+}
+
+func (m *Msg) ToJSON() []byte {
+	val, _ := json.Marshal(m.ToMap())
+	return val
+}
+
+func (m *Msg) Error() string {
+	return m.Message
+}
+
+func (m *Msg) Write(w http.ResponseWriter, r *http.Request) {
+	render.Status(r, m.Status)
+	render.JSON(w, r, m.ToMap())
+}
+
+func (m *Msg) IsError() bool {
+	return m.Is400() || m.Is500()
+}
+
+func (m *Msg) Is400() bool {
+	return m.Status >= 400 && m.Status < 500
+}
+
+func (m *Msg) Is500() bool {
+	return m.Status >= 500
+}
+
+func (m *Msg) Set(key string, val interface{}) Message {
+	if m.Properties == nil {
+		m.Properties = map[string]interface{}{}
+	}
+	m.Properties[key] = val
+	return m
+}
+
+func (m *Msg) Get(key string) interface{} {
+	if m.Properties == nil {
+		return nil
+	}
+	return m.Properties[key]
+}
+
+func (m *Msg) Add(msgs ...Message) Message {
+	for _, msg := range msgs {
+		m.Message += "; " + msg.Error()
+	}
+	return m
+}
+
+func GetPrinter(r *http.Request) *message.Printer {
+	if r != nil {
+		ctx := r.Context()
+		ctxI18n := ctx.Value("i18n")
+		if ctxI18n != nil {
+			if i18n, ok := ctxI18n.(*message.Printer); ok {
+				return i18n
+			}
+		}
+	}
+	return message.NewPrinter(language.BritishEnglish)
+}
+
+func FromError(status int, err error) Message {
+	return &Msg{
+		Message: err.Error(),
+		Status:  status,
+	}
+}
