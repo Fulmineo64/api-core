@@ -1,4 +1,4 @@
-package controller
+package query
 
 import (
 	"net/http"
@@ -12,7 +12,6 @@ import (
 	"api_core/model"
 	"api_core/params"
 
-	"github.com/go-chi/chi"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
@@ -51,8 +50,6 @@ type NestedModel struct {
 func (n NestedModel) NextNested() map[string]NestedModel {
 	return n.ModelInfo.Nested
 }
-
-var fkAlias = "___FK___"
 
 func JoinRelations(r *http.Request, d *gorm.DB, config QueryMapConfig, modelInfo *ModelInfo, relations map[string]*params.Conditions) {
 	joins := ""
@@ -602,8 +599,8 @@ func RelationsFromModelInfo(mdl *ModelInfo, otherRelations map[string]*params.Co
 
 func GetRelations(r *http.Request) []string {
 	var relations []string
-	if len(chi.URLParam(r, "rel")) > 0 {
-		relations = strings.Split(strings.ReplaceAll(chi.URLParam(r, "rel"), " ", ""), ",")
+	if len(r.URL.Query().Get("rel")) > 0 {
+		relations = strings.Split(strings.ReplaceAll(r.URL.Query().Get("rel"), " ", ""), ",")
 	}
 	return relations
 }

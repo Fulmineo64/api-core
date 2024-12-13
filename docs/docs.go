@@ -9,8 +9,8 @@ import (
 	"strings"
 	"unicode"
 
+	"api_core/controller"
 	"api_core/ctx"
-	"api_core/registry"
 	"api_core/utils"
 
 	"github.com/go-chi/render"
@@ -264,7 +264,7 @@ func GetDocs(r *http.Request, options DocsOptions) OpenAPIV3 {
 	hasSession := ctx.Session(r) != nil
 	pathParamsReg := regexp.MustCompile(`:(\w+)`)
 
-	for _, controller := range registry.ByName {
+	for _, controller := range controller.ByName {
 		for _, route := range controller.GetRoutes() {
 			if route.PermissionsFunc != nil && (!hasSession || route.PermissionsFunc(r) != nil) {
 				continue

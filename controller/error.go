@@ -9,12 +9,6 @@ import (
 
 var EnableRecover bool
 
-type Response struct {
-	Data  interface{}
-	Next  string
-	Count int64
-}
-
 func AbortIfError(w http.ResponseWriter, r *http.Request, err error) bool {
 	if err != nil {
 		AbortWithError(w, r, err)

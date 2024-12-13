@@ -1,4 +1,4 @@
-package structure
+package controller
 
 import (
 	"net/http"
@@ -6,13 +6,16 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
+	"api_core/app"
+	"api_core/message"
 	"api_core/model"
 	"api_core/permissions"
-	"api_core/registry"
+	"api_core/query"
 	"api_core/utils"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/render"
 	"gorm.io/gorm/schema"
 )
 
@@ -51,6 +54,51 @@ type StructInfo struct {
 	UpdateConditions []model.UpdateConditions `json:"updateConditions"`
 }
 
+func GetStructure(mdl any) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		relations := query.GetRelations(r)
+		splittedRelations := [][]string{}
+		for _, rel := range relations {
+			splittedRelations = append(splittedRelations, strings.Split(rel, "."))
+		}
+
+		modelSchema, err := schema.Parse(mdl, &sync.Map{}, app.DB.NamingStrategy)
+		if err != nil {
+			message.InternalServerError(r).Write(w, r)
+			return
+		}
+
+		render.JSON(w, r, GetStructInfo(r, modelSchema, splittedRelations))
+	}
+}
+
+func GetRelStructure(mdl any) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		modelSchema, err := schema.Parse(mdl, &sync.Map{}, app.DB.NamingStrategy)
+		if err != nil {
+			message.InternalServerError(r).Write(w, r)
+			return
+		}
+
+		pieces := strings.Split(r.URL.Query().Get("rel"), ".")
+		relSchema := modelSchema
+		for i, piece := range pieces {
+			if rel, ok := relSchema.Relationships.Relations[piece]; ok {
+				relSchema = rel.FieldSchema
+				if msg := permissions.Get(reflect.New(relSchema.ModelType).Interface())(r); msg != nil {
+					message.UnauthorizedRelations(r, strings.Join(pieces[:i+1], ".")).Add(msg).Write(w, r)
+					return
+				}
+			} else {
+				message.InvalidRelations(r, strings.Join(pieces[:i+1], ".")).Write(w, r)
+				return
+			}
+		}
+
+		render.JSON(w, r, GetStructInfo(r, relSchema, [][]string{}))
+	}
+}
+
 func GetStructInfo(r *http.Request, schem *schema.Schema, relations [][]string) StructInfo {
 	var checkFn = func(fns []func(*schema.Field) bool, sc *schema.Field) bool {
 		for _, fn := range fns {
@@ -73,7 +121,7 @@ func GetStructInfo(r *http.Request, schem *schema.Schema, relations [][]string) 
 		},
 	}
 
-	if chi.URLParam(r, "w") == "1" {
+	if r.URL.Query().Get("w") == "1" {
 		// Checks for only writable
 		fn := func(f *schema.Field) bool {
 			return f.Creatable && f.Updatable
@@ -81,7 +129,7 @@ func GetStructInfo(r *http.Request, schem *schema.Schema, relations [][]string) 
 		checkFieldFns = append(checkFieldFns, fn)
 		checkRelFns = append(checkRelFns, fn)
 	}
-	if chi.URLParam(r, "r") == "1" {
+	if r.URL.Query().Get("r") == "1" {
 		// Checks for only readable
 		fn := func(f *schema.Field) bool {
 			return f.Readable
@@ -204,7 +252,7 @@ func GetRelationInfo(r *http.Request, rel *schema.Relationship, relations [][]st
 		typ = typ.Elem()
 	}
 
-	ctrl := registry.FindControllerByModel(typ)
+	ctrl := FindControllerByModel(typ)
 	if ctrl != nil {
 		relationInfo.Endpoint = ctrl.GetEndpointPath()
 	}

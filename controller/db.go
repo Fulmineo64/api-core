@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -45,14 +44,14 @@ func CreateToDb(w http.ResponseWriter, r *http.Request, db *gorm.DB, model inter
 		checked := map[string]struct{}{}
 		l := modelsSlice.Len()
 		for i := 0; i < l; i++ {
-			msg := CheckModelPermissions(r, modelsSlice.Index(i), modelSchema, checked, false)
+			msg := permissions.CheckModel(r, modelsSlice.Index(i), modelSchema, checked, false)
 			if msg != nil {
 				return msg
 			}
 		}
 	} else {
 		checked := map[string]struct{}{}
-		msg := CheckModelPermissions(r, modelsSlice, modelSchema, checked, false)
+		msg := permissions.CheckModel(r, modelsSlice, modelSchema, checked, false)
 		if msg != nil {
 			return msg
 		}
@@ -72,41 +71,6 @@ func CreateToDb(w http.ResponseWriter, r *http.Request, db *gorm.DB, model inter
 	return nil
 }
 
-func CheckModelPermissions(r *http.Request, modelVal reflect.Value, modelSchema *schema.Schema, cache map[string]struct{}, checkDelete bool) error {
-	for _, rel := range modelSchema.Relationships.HasMany {
-		relField := rel.Field.ReflectValueOf(context.Background(), modelVal)
-		if !relField.IsNil() {
-			len := relField.Len()
-			for i := 0; i < len; i++ {
-				item := relField.Index(i)
-				if _, ok := cache[item.Type().String()+"_get"]; !ok {
-					if msg := permissions.Get(item.Interface())(r); msg != nil {
-						return msg
-					}
-					cache[item.Type().String()+"_get"] = struct{}{}
-				}
-				if checkDelete {
-					if _, ok := cache[item.Type().String()+"_del"]; !ok {
-						deleteField := item.FieldByName("Delete")
-						if deleteField.IsValid() && deleteField.Bool() {
-							if msg := permissions.Delete(item.Interface())(r); msg != nil {
-								return msg
-							}
-							cache[item.Type().String()+"_del"] = struct{}{}
-						}
-					}
-				}
-				msg := CheckModelPermissions(r, item, rel.FieldSchema, cache, checkDelete)
-				if msg != nil {
-					return msg
-				}
-			}
-		}
-	}
-
-	return nil
-}
-
 func UpdateToDb(w http.ResponseWriter, r *http.Request, model interface{}, values any) error {
 	db := ctx.DB(r).Session(&gorm.Session{CreateBatchSize: 50})
 
@@ -120,7 +84,7 @@ func UpdateToDb(w http.ResponseWriter, r *http.Request, model interface{}, value
 		return errors.New("not supported")
 	} else {
 		checked := map[string]struct{}{}
-		msg := CheckModelPermissions(r, modelsSlice, modelSchema, checked, true)
+		msg := permissions.CheckModel(r, modelsSlice, modelSchema, checked, true)
 		if msg != nil {
 			return msg
 		}

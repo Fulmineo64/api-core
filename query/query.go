@@ -1,4 +1,4 @@
-package controller
+package query
 
 import (
 	"fmt"
@@ -13,11 +13,12 @@ import (
 	"api_core/params"
 	"api_core/permissions"
 
-	"github.com/go-chi/chi"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"
 )
+
+var fkAlias = "___FK___"
 
 type QueryMapArgs struct {
 	// Args
@@ -193,7 +194,7 @@ func QueryMapRecursive(r *http.Request, db *gorm.DB, args *QueryMapArgs, config 
 			tx = tx.Where(args.Primaries)
 		}
 	}
-	if chi.URLParam(r, "SUM") == "1" {
+	if r.URL.Query().Get("SUM") == "1" {
 		n := clause.OrderBy{}.Name()
 		// ord := tx.Statement.Clauses[n]
 		delete(tx.Statement.Clauses, n)

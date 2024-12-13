@@ -1,7 +1,6 @@
-package registry
+package controller
 
 import (
-	"api_core/controller"
 	"api_core/permissions"
 	"api_core/utils"
 	"net/http"
@@ -11,14 +10,14 @@ import (
 	"github.com/go-chi/chi"
 )
 
-var ByName = map[string]controller.CRUDSController{}
-var ByModel = map[string]controller.CRUDSController{}
+var ByName = map[string]CRUDSController{}
+var ByModel = map[string]CRUDSController{}
 
-func FindControllerByModel(modelType reflect.Type) controller.CRUDSController {
+func FindControllerByModel(modelType reflect.Type) CRUDSController {
 	return ByModel[modelType.String()]
 }
 
-func Register(basePath string, container chi.Router, toRegister string, c controller.CRUDSController) {
+func Register(basePath string, container chi.Router, toRegister string, c CRUDSController) {
 	c.SetBasePath(basePath)
 	controllerName := reflect.Indirect(reflect.ValueOf(c)).Type().Name()
 	c.SetEndpointIfAbsent(utils.FirstLower(controllerName))
