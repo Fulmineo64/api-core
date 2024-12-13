@@ -1,6 +1,7 @@
-package query
+package controller
 
 import (
+	"api_core/query"
 	"api_core/types/data"
 	"encoding/csv"
 	"encoding/json"
@@ -22,7 +23,7 @@ type Response struct {
 }
 
 func HandleGet(w http.ResponseWriter, r *http.Request, db *gorm.DB, primaries map[string]interface{}, model any) error {
-	args := QueryMapArgs{
+	args := query.QueryMapArgs{
 		Sel:       r.URL.Query().Get("sel"),
 		Rel:       r.URL.Query().Get("rel"),
 		Params:    r.URL.Query().Get("params"),
@@ -33,7 +34,7 @@ func HandleGet(w http.ResponseWriter, r *http.Request, db *gorm.DB, primaries ma
 		Primaries: primaries,
 		Model:     model,
 	}
-	err := QueryMap(r, db, &args, QueryMapConfig{})
+	err := query.QueryMap(r, db, &args, query.QueryMapConfig{})
 	if err != nil {
 		return err
 	}
@@ -44,12 +45,12 @@ func HandleGet(w http.ResponseWriter, r *http.Request, db *gorm.DB, primaries ma
 	return nil
 }
 
-func WriteQueryMapResult(w http.ResponseWriter, r *http.Request, args *QueryMapArgs) error {
+func WriteQueryMapResult(w http.ResponseWriter, r *http.Request, args *query.QueryMapArgs) error {
 	w.Header().Set("X-Total-Count", strconv.Itoa(int(args.Count)))
 	var link string
-	if ShouldPaginate(args.PagStart, args.PagEnd) {
-		limit := GetLimit(args.PagStart, args.PagEnd)
-		start := GetOffset(args.PagStart) + limit
+	if query.ShouldPaginate(args.PagStart, args.PagEnd) {
+		limit := query.GetLimit(args.PagStart, args.PagEnd)
+		start := query.GetOffset(args.PagStart) + limit
 		end := start + limit
 		if int64(end) < args.Count {
 			var params []string
@@ -173,9 +174,9 @@ func WriteQueryMapResult(w http.ResponseWriter, r *http.Request, args *QueryMapA
 func WriteDataWithCount(w http.ResponseWriter, r *http.Request, pagStart, pagEnd string, data any, count int64) error {
 	w.Header().Set("X-Total-Count", strconv.Itoa(int(count)))
 	var link string
-	if ShouldPaginate(pagStart, pagEnd) {
-		limit := GetLimit(pagStart, pagEnd)
-		start := GetOffset(pagStart) + limit
+	if query.ShouldPaginate(pagStart, pagEnd) {
+		limit := query.GetLimit(pagStart, pagEnd)
+		start := query.GetOffset(pagStart) + limit
 		end := start + limit
 		if int64(end) < count {
 			var params []string

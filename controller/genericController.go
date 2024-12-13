@@ -35,7 +35,7 @@ func (c GenericController[T]) ModelSlice() []T {
 }
 
 func (c GenericController[T]) Get(w http.ResponseWriter, r *http.Request) {
-	query.HandleGet(w, r, ctx.DB(r), map[string]interface{}{}, c.Model())
+	HandleGet(w, r, ctx.DB(r), map[string]interface{}{}, c.Model())
 }
 
 func (c GenericController[T]) GetOne(w http.ResponseWriter, r *http.Request) {
@@ -44,7 +44,7 @@ func (c GenericController[T]) GetOne(w http.ResponseWriter, r *http.Request) {
 	if AbortIfError(w, r, err) {
 		return
 	}
-	err = query.HandleGet(w, r, ctx.DB(r), primaries, c.Model())
+	err = HandleGet(w, r, ctx.DB(r), primaries, c.Model())
 	if AbortIfError(w, r, err) {
 		return
 	}
@@ -305,6 +305,14 @@ func (c GenericController[T]) Routes() []Route {
 		}
 	}
 	return routes
+}
+
+func (c GenericController[T]) Endpoint(controller any) string {
+	t := reflect.TypeOf(controller)
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	return t.Name()
 }
 
 func PathParamsToModels(r *http.Request, modelType reflect.Type, fields []string, destination *[]interface{}) error {
