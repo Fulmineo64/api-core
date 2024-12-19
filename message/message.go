@@ -21,7 +21,7 @@ type Message interface {
 	Is500() bool
 	Set(key string, val interface{}) Message
 	Get(key string) interface{}
-	Add(msgs ...Message) Message
+	Add(errors ...error) Message
 }
 
 type Msg struct {
@@ -86,9 +86,9 @@ func (m *Msg) Get(key string) interface{} {
 	return m.Properties[key]
 }
 
-func (m *Msg) Add(msgs ...Message) Message {
-	for _, msg := range msgs {
-		m.Message += "; " + msg.Error()
+func (m *Msg) Add(errors ...error) Message {
+	for _, e := range errors {
+		m.Message += "; " + e.Error()
 	}
 	return m
 }

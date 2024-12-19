@@ -9,8 +9,9 @@ import (
 	"strings"
 	"unicode"
 
-	"api_core/controller"
-	"api_core/ctx"
+	"api_core/permissions"
+	"api_core/registry"
+	"api_core/request"
 	"api_core/utils"
 
 	"github.com/go-chi/render"
@@ -261,16 +262,16 @@ func GetDocs(r *http.Request, options DocsOptions) OpenAPIV3 {
 		},
 	}
 
-	hasSession := ctx.Session(r) != nil
-	pathParamsReg := regexp.MustCompile(`:(\w+)`)
+	hasSession := request.Session(r) != nil
+	pathParamsReg := regexp.MustCompile(`{(\w+)}`)
 
-	for _, controller := range controller.ByName {
-		for _, route := range controller.GetRoutes() {
-			if route.PermissionsFunc != nil && (!hasSession || route.PermissionsFunc(r) != nil) {
+	for _, controller := range registry.ControllerByName {
+		for _, route := range controller.Routes() {
+			if route.Permissions != nil && len(route.Permissions) > 0 && (!hasSession || permissions.Validate(r, route.Permissions...) != nil) {
 				continue
 			}
 
-			routePath := path.Clean(controller.GetEndpointPath() + "/" + route.Name)
+			routePath := path.Clean(controller.FullPath(controller) + "/" + route.Pattern)
 			paramsResults := pathParamsReg.FindAllStringSubmatch(routePath, -1)
 			routePath = pathParamsReg.ReplaceAllString(routePath, "{$1}")
 
@@ -279,7 +280,7 @@ func GetDocs(r *http.Request, options DocsOptions) OpenAPIV3 {
 				docs.Paths[routePath] = map[string]OpenAPIV3Route{}
 			}
 			currentRoute = docs.Paths[routePath]
-			mainTag := endpointToTag(controller.GetEndpointPath())
+			mainTag := endpointToTag(controller.FullPath(controller))
 			newRoute := OpenAPIV3Route{
 				Tags:       []string{mainTag},
 				Parameters: []interface{}{},

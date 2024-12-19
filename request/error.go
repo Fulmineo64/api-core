@@ -1,6 +1,7 @@
-package controller
+package request
 
 import (
+	"api_core/app"
 	"fmt"
 	"net/http"
 	"runtime/debug"
@@ -17,7 +18,7 @@ func AbortIfError(w http.ResponseWriter, r *http.Request, err error) bool {
 }
 
 func AbortWithError(w http.ResponseWriter, r *http.Request, err error) {
-	Hooks.AbortWithError.Run(w, r, err)
+	app.Hooks.AbortWithError.Run(w, r, err)
 }
 
 func RecoverIfEnabled(w http.ResponseWriter, r *http.Request) {
@@ -30,6 +31,6 @@ func Recover(w http.ResponseWriter, r *http.Request) {
 	if err := recover(); err != nil {
 		stck := strings.Split(string(debug.Stack()), "\n")
 		errStr := fmt.Sprint(err) + "\n" + strings.Join(stck[3:], "\n")
-		Hooks.OnRecover.Run(w, r, errStr)
+		app.Hooks.OnRecover.Run(w, r, errStr)
 	}
 }

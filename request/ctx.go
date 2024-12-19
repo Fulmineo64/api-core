@@ -1,4 +1,4 @@
-package ctx
+package request
 
 import (
 	"api_core/app"
@@ -28,7 +28,7 @@ func Session(r *http.Request) *app.Session {
 
 type ContextType string
 
-const (
+var (
 	RequestKey ContextType = "r"
 	DBKey      ContextType = "db"
 	I18nKey    ContextType = "i18n"

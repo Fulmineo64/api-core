@@ -1,10 +1,10 @@
 package query
 
 import (
-	"api_core/ctx"
 	"api_core/message"
 	"api_core/model"
 	"api_core/params"
+	"api_core/request"
 	"net/http"
 	"reflect"
 	"regexp"
@@ -28,7 +28,7 @@ type ModelInfo struct {
 	Distinct       bool
 }
 
-func GetModelInfo(r *http.Request, modelSchema *schema.Schema, selects string, modelInfo *ModelInfo, args *QueryMapArgs) message.Message {
+func GetModelInfo(r *http.Request, modelSchema *schema.Schema, selects string, modelInfo *ModelInfo, args *QueryArgs, config QueryConfig) message.Message {
 	modelInfo.Table = strings.TrimSpace(modelInfo.Schema.Table)
 	if strings.HasSuffix(modelInfo.Table, ")") {
 		modelInfo.Table = queryTableName
@@ -105,7 +105,7 @@ func GetModelInfo(r *http.Request, modelSchema *schema.Schema, selects string, m
 							}
 							mdl := reflect.New(relSchema.ModelType).Interface()
 							if ordMdl, ok := mdl.(model.OrderedModel); ok {
-								n.ModelInfo.Order = ordMdl.DefaultOrder(ctx.DB(r), n.ModelInfo.Table)
+								n.ModelInfo.Order = ordMdl.DefaultOrder(request.DB(r), n.ModelInfo.Table)
 							}
 							l := len(rel.References)
 							var fk string
@@ -210,7 +210,7 @@ func GetModelInfo(r *http.Request, modelSchema *schema.Schema, selects string, m
 						return message.InvalidField(r, field.Name)
 					}
 				} else if len(field.DBName) != 0 {
-					sel = table + ".[" + field.DBName + "]"
+					sel = table + "." + config.Dialector.EscapeField(field.DBName)
 				}
 				if len(sel) > 0 {
 					if sum {
@@ -223,12 +223,12 @@ func GetModelInfo(r *http.Request, modelSchema *schema.Schema, selects string, m
 					}
 					structField := field.StructField
 					if len(fieldAlias) > 0 {
-						regex := regexp.MustCompile(`^[\w*]+$`)
+						regex := regexp.MustCompile(`^` + config.Dialector.AliasRegex() + `+$`)
 						if !regex.MatchString(fieldAlias) {
 							return message.InvalidFieldAlias(r, fieldAlias, fieldName)
 						}
 						structField.Name = strings.ReplaceAll(fieldAlias, "*", field.Name)
-						sel += " AS [" + structField.Name + "]"
+						sel += " AS " + config.Dialector.EscapeField(structField.Name)
 					}
 					info.Fields = append(info.Fields, structField)
 					info.Select = append(info.Select, sel)
@@ -248,12 +248,12 @@ func GetModelInfo(r *http.Request, modelSchema *schema.Schema, selects string, m
 		}
 	}
 	if len(args.Ord) > 0 {
-		msg := ParseOrder(r, args.Ord, modelInfo)
+		msg := ParseOrder(r, args.Ord, modelInfo, config)
 		if msg != nil {
 			return msg
 		}
 	} else if ordModel, ok := reflect.New(modelSchema.ModelType).Interface().(model.OrderedModel); ok {
-		modelInfo.Order = ordModel.DefaultOrder(ctx.DB(r), modelInfo.Table)
+		modelInfo.Order = ordModel.DefaultOrder(request.DB(r), modelInfo.Table)
 	} else if modelSchema.PrioritizedPrimaryField != nil {
 		modelInfo.Order = modelInfo.Table + "." + modelSchema.PrioritizedPrimaryField.DBName
 	}

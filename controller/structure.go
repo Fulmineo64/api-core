@@ -13,6 +13,7 @@ import (
 	"api_core/model"
 	"api_core/permissions"
 	"api_core/query"
+	"api_core/registry"
 	"api_core/utils"
 
 	"github.com/go-chi/render"
@@ -252,9 +253,9 @@ func GetRelationInfo(r *http.Request, rel *schema.Relationship, relations [][]st
 		typ = typ.Elem()
 	}
 
-	ctrl := FindControllerByModel(typ)
+	ctrl := registry.FindControllerByModel(typ)
 	if ctrl != nil {
-		relationInfo.Endpoint = ctrl.GetEndpointPath()
+		relationInfo.Endpoint = ctrl.BasePath()
 	}
 
 	for _, tag := range gormTags {

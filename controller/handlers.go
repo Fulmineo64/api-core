@@ -1,10 +1,12 @@
 package controller
 
 import (
+	"api_core/app/dialectors"
+	"api_core/datatypes"
 	"api_core/query"
-	"api_core/types/data"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -23,7 +25,14 @@ type Response struct {
 }
 
 func HandleGet(w http.ResponseWriter, r *http.Request, db *gorm.DB, primaries map[string]interface{}, model any) error {
-	args := query.QueryMapArgs{
+	if db == nil {
+		return errors.New("please provide a valid instance of *gorm.DB in the db param")
+	}
+	dialector, err := dialectors.ByDB(db)
+	if err != nil {
+		return err
+	}
+	args := query.QueryArgs{
 		Sel:       r.URL.Query().Get("sel"),
 		Rel:       r.URL.Query().Get("rel"),
 		Params:    r.URL.Query().Get("params"),
@@ -34,7 +43,9 @@ func HandleGet(w http.ResponseWriter, r *http.Request, db *gorm.DB, primaries ma
 		Primaries: primaries,
 		Model:     model,
 	}
-	err := query.QueryMap(r, db, &args, query.QueryMapConfig{})
+	err = query.Query(r, db, &args, query.QueryConfig{
+		Dialector: dialector,
+	})
 	if err != nil {
 		return err
 	}
@@ -45,7 +56,7 @@ func HandleGet(w http.ResponseWriter, r *http.Request, db *gorm.DB, primaries ma
 	return nil
 }
 
-func WriteQueryMapResult(w http.ResponseWriter, r *http.Request, args *query.QueryMapArgs) error {
+func WriteQueryMapResult(w http.ResponseWriter, r *http.Request, args *query.QueryArgs) error {
 	w.Header().Set("X-Total-Count", strconv.Itoa(int(args.Count)))
 	var link string
 	if query.ShouldPaginate(args.PagStart, args.PagEnd) {
@@ -108,16 +119,16 @@ func WriteQueryMapResult(w http.ResponseWriter, r *http.Request, args *query.Que
 						}
 						f := t.Interface()
 						if f != nil && f != "" {
-							if date, ok := f.(data.Date); ok {
+							if date, ok := f.(datatypes.Date); ok {
 								row = append(row, time.Time(date).Format("02/01/2006"))
-							} else if datetime, ok := f.(data.Datetime); ok {
+							} else if datetime, ok := f.(datatypes.Datetime); ok {
 								if r.Header.Get("Only-Date") == "" {
 									loc, _ := time.LoadLocation(tmz)
 									row = append(row, time.Time(datetime).In(loc).Format("02/01/2006 15:04"))
 								} else {
 									row = append(row, time.Time(datetime).Format("02/01/2006"))
 								}
-							} else if _, ok := f.(data.RoundedFloat); ok {
+							} else if _, ok := f.(datatypes.RoundedFloat); ok {
 								row = append(row, strings.ReplaceAll(fmt.Sprint(f), ".", ","))
 							} else if _, ok := f.(float32); ok {
 								row = append(row, strings.ReplaceAll(fmt.Sprint(f), ".", ","))

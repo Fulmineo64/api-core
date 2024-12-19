@@ -1,9 +1,11 @@
 package controller
 
 import (
-	"api_core/ctx"
 	"api_core/message"
+	"api_core/model"
 	"api_core/permissions"
+	"api_core/registry"
+	"api_core/request"
 	"api_core/utils"
 	"encoding/base64"
 	"fmt"
@@ -19,9 +21,8 @@ import (
 	"strings"
 	"time"
 
-	"api_core/model"
-
 	"github.com/gin-gonic/gin"
+	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
 	"gorm.io/gorm"
 )
@@ -240,23 +241,12 @@ func DeleteFile(pathFunc, nameFunc func(*http.Request) string) func(http.Respons
 		err := os.Remove(file)
 		if err != nil {
 			if !os.IsNotExist(err) {
-				AbortWithError(w, r, err)
+				request.AbortWithError(w, r, err)
 				return
 			}
 		}
 		message.Ok(r).Write(w, r)
 	}
-}
-
-func CRDController() {
-	/*
-
-	 */
-
-	// TODO: Registrare funzioni che gestiscono GET all, GET singolo, POST, DELETE per la cartella specificata, le route disponibili sempre con la stringa CRD
-	// TODO: Aggiungere una PermissionFunc specificata dall'utente per ogni metodo (GET, POST e DELETE)
-	// TODO: Creare permission func customizzata in base alla risorsa padre (ottenibile da controller.GetModel)
-	// TODO: Controllare, nella permission func customizzata, se il modello ha la funzione DefaultConditions, se si eseguire una query COUNT con esse per determinare se l'utente ha accesso alla risorsa base
 }
 
 func CheckResourceAvailable(db *gorm.DB, mdl any) bool {
@@ -310,45 +300,47 @@ type FileSystemOptions struct {
 	SubFolder bool
 }
 
-func FileSystem(ctrl AddRouter, apiPath string, filePath func(*http.Request) string, fsPermissions FileSystemPermissions, options FileSystemOptions) {
-	ctrl.AddRoute(http.MethodGet, apiPath, permissions.Merge(fsPermissions.Get, fsPermissions.Conditions), Folder(filePath))
-	ctrl.AddRoute(http.MethodPost, apiPath, permissions.Merge(fsPermissions.Post, fsPermissions.Conditions), PostFile(filePath))
+func FileSystem(apiPath string, filePath func(*http.Request) string, fsPermissions FileSystemPermissions, options FileSystemOptions) []registry.Route {
+	routes := []registry.Route{}
+	routes = append(routes, NewRoute(http.MethodGet, apiPath, Folder(filePath), permissions.Merge(fsPermissions.Get, fsPermissions.Conditions)))
+	routes = append(routes, NewRoute(http.MethodPost, apiPath, PostFile(filePath), permissions.Merge(fsPermissions.Post, fsPermissions.Conditions)))
 	if options.SubFolder {
-		ctrl.AddRoute(http.MethodGet, apiPath+"/:name", permissions.Merge(fsPermissions.GetFile, fsPermissions.Conditions), GetFileOrFolder(filePath, func(r *http.Request) string { return r.URL.Query().Get("name") }))
+		routes = append(routes, NewRoute(http.MethodGet, apiPath+"/{name}", GetFileOrFolder(filePath, func(r *http.Request) string { return chi.URLParam(r, "name") }), permissions.Merge(fsPermissions.GetFile, fsPermissions.Conditions)))
 	} else {
-		ctrl.AddRoute(http.MethodGet, apiPath+"/:name", permissions.Merge(fsPermissions.GetFile, fsPermissions.Conditions), GetFile(filePath, func(r *http.Request) string { return r.URL.Query().Get("name") }))
+		routes = append(routes, NewRoute(http.MethodGet, apiPath+"/{name}", GetFile(filePath, func(r *http.Request) string { return chi.URLParam(r, "name") }), permissions.Merge(fsPermissions.GetFile, fsPermissions.Conditions)))
 	}
-	ctrl.AddRoute(http.MethodDelete, apiPath+"/:name", permissions.Merge(fsPermissions.Delete, fsPermissions.Conditions), DeleteFile(filePath, func(r *http.Request) string { return r.URL.Query().Get("name") }))
+	routes = append(routes, NewRoute(http.MethodDelete, apiPath+"/{name}", DeleteFile(filePath, func(r *http.Request) string { return chi.URLParam(r, "name") }), permissions.Merge(fsPermissions.Delete, fsPermissions.Conditions)))
 
 	if options.SubFolder {
 		filePathFolder := func(r *http.Request) string {
-			return path.Join(filePath(r), r.URL.Query().Get("name"))
+			return path.Join(filePath(r), chi.URLParam(r, "name"))
 		}
-		ctrl.AddRoute(http.MethodPost, apiPath+"/:name", permissions.Merge(fsPermissions.Post, fsPermissions.Conditions), PostFile(filePathFolder))
-		ctrl.AddRoute(http.MethodGet, apiPath+"/:name/:fileName", permissions.Merge(fsPermissions.GetFile, fsPermissions.Conditions), GetFile(filePathFolder, func(r *http.Request) string { return r.URL.Query().Get("fileName") }))
-		ctrl.AddRoute(http.MethodDelete, apiPath+"/:name/:fileName", permissions.Merge(fsPermissions.Delete, fsPermissions.Conditions), DeleteFile(filePathFolder, func(r *http.Request) string { return r.URL.Query().Get("fileName") }))
+		routes = append(routes, NewRoute(http.MethodPost, apiPath+"/{name}", PostFile(filePathFolder), permissions.Merge(fsPermissions.Post, fsPermissions.Conditions)))
+		routes = append(routes, NewRoute(http.MethodGet, apiPath+"/{name}/{fileName}", GetFile(filePathFolder, func(r *http.Request) string { return chi.URLParam(r, "fileName") }), permissions.Merge(fsPermissions.GetFile, fsPermissions.Conditions)))
+		routes = append(routes, NewRoute(http.MethodDelete, apiPath+"/{name}/{fileName}", DeleteFile(filePathFolder, func(r *http.Request) string { return chi.URLParam(r, "fileName") }), permissions.Merge(fsPermissions.Delete, fsPermissions.Conditions)))
 	}
+	return routes
 }
 
-func DefaultFileSystemPermissions(ctrl GetModeler) FileSystemPermissions {
-	mdl := ctrl.GetModel()
+func DefaultFileSystemPermissions(ctrl registry.Modeler[any]) FileSystemPermissions {
+	mdl := ctrl.Model()
 	fsPermissions := FileSystemPermissions{
 		Get:     permissions.Get(mdl),
 		Post:    permissions.Post(mdl),
 		GetFile: permissions.Get(mdl),
 		Delete:  permissions.Delete(mdl),
 	}
-	if condMdl, ok := mdl.(model.ConditionsModel); ok {
-		fsPermissions.Conditions = func(r *http.Request) message.Message {
-			db := ctx.DB(r)
+	if condMdl, ok := (*mdl).(model.ConditionsModel); ok {
+		fsPermissions.Conditions = func(r *http.Request) error {
+			db := request.DB(r)
 			primaries := map[string]interface{}{}
-			msg := GetPathParamsMsg(r, ctrl.NewModel(), utils.GetPrimaryFields(ctrl.GetModelType()), &primaries)
+			msg := GetPathParamsMsg(r, ctrl.Model(), utils.GetPrimaryFields(ctrl.ModelType()), &primaries)
 			if msg != nil {
 				return msg
 			}
 
 			tx := db.Model(mdl).Where(primaries)
-			table := mdl.(model.TableModel).TableName()
+			table := (*mdl).(model.TableModel).TableName()
 			query, args := condMdl.DefaultConditions(db, table)
 			if query != "" {
 				tx = tx.Where("("+query+")", args...)

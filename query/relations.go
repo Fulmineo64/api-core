@@ -31,7 +31,7 @@ func (n NestedModel) NextNested() map[string]NestedModel {
 	return n.ModelInfo.Nested
 }
 
-func JoinRelations(r *http.Request, d *gorm.DB, config QueryMapConfig, modelInfo *ModelInfo, relations map[string]*params.Conditions) {
+func JoinRelations(r *http.Request, d *gorm.DB, config QueryConfig, modelInfo *ModelInfo, relations map[string]*params.Conditions) {
 	joins := ""
 	joinsArgs := []interface{}{}
 	joinedTables := map[string]*schema.Schema{}
@@ -117,7 +117,7 @@ func ModelToTableNames(stmt *string, modelSchema *schema.Schema) []string {
 	return relations
 }
 
-func ParseOrder(r *http.Request, order string, info *ModelInfo) message.Message {
+func ParseOrder(r *http.Request, order string, info *ModelInfo, config QueryConfig) message.Message {
 	if len(order) > 0 {
 		local := []string{}
 		nested := map[string][]string{}
@@ -160,7 +160,7 @@ func ParseOrder(r *http.Request, order string, info *ModelInfo) message.Message 
 				piece := strings.TrimSuffix(strings.TrimSuffix(pieces[len(pieces)-1], " DESC"), " ASC")
 				fld := relSchema.LookUpField(piece)
 				if fld == nil {
-					search := "[" + piece + "]"
+					search := config.Dialector.EscapeField(piece)
 					found := false
 					for _, f := range info.Select {
 						if asIndex := strings.LastIndex(f, " AS "); asIndex != -1 {
@@ -186,7 +186,7 @@ func ParseOrder(r *http.Request, order string, info *ModelInfo) message.Message 
 				if fld != nil {
 					if info.Distinct {
 						found := false
-						selField := "[" + fld.Name + "]"
+						selField := config.Dialector.EscapeField(fld.Name)
 						selRel := selField
 						if len(pieces) > 1 {
 							selRel = strings.Join(pieces[:len(pieces)-1], "__") + "." + selField
@@ -228,7 +228,7 @@ func ParseOrder(r *http.Request, order string, info *ModelInfo) message.Message 
 
 		for key, nestedArray := range nested {
 			if n, ok := info.Nested[key]; ok {
-				msg := ParseOrder(r, strings.Join(nestedArray, ","), n.ModelInfo)
+				msg := ParseOrder(r, strings.Join(nestedArray, ","), n.ModelInfo, config)
 				if msg != nil {
 					return msg
 				}

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"api_core/app/dialectors"
 	"api_core/message"
 	"api_core/model"
 	"api_core/params"
@@ -20,7 +21,7 @@ import (
 
 var fkAlias = "___FK___"
 
-type QueryMapArgs struct {
+type QueryArgs struct {
 	// Args
 	Sel       string
 	Rel       string
@@ -38,15 +39,16 @@ type QueryMapArgs struct {
 	Count  int64
 }
 
-type QueryMapConfig struct {
+type QueryConfig struct {
 	// Options
 	SkipValidation bool
 	SkipDefaults   bool
 	P              map[string]struct{}
 	Ord            map[string]struct{}
+	Dialector      dialectors.Dialector
 }
 
-func QueryMap(r *http.Request, db *gorm.DB, args *QueryMapArgs, config QueryMapConfig) error {
+func Query(r *http.Request, db *gorm.DB, args *QueryArgs, config QueryConfig) error {
 	if args.Sel != "" {
 		args.Sel = parseSel(args.Sel)
 	}
@@ -64,7 +66,7 @@ func QueryMap(r *http.Request, db *gorm.DB, args *QueryMapArgs, config QueryMapC
 	// TODO: Extract and validate relations here
 
 	args.Info = ModelInfo{Select: []string{}, SelectArgs: []any{}, Relations: map[string]*params.Conditions{}, Nested: map[string]NestedModel{}, Schema: modelSchema}
-	msg := GetModelInfo(r, modelSchema, getSelect(args.Sel, args.Rel), &args.Info, args)
+	msg := GetModelInfo(r, modelSchema, getSelect(args.Sel, args.Rel), &args.Info, args, config)
 	if msg != nil {
 		return msg
 	}
@@ -105,7 +107,7 @@ func QueryMap(r *http.Request, db *gorm.DB, args *QueryMapArgs, config QueryMapC
 	}
 
 	args.Result = []map[string]any{}
-	err = QueryMapRecursive(r, db, args, config, &args.Info, &conds, &args.Result)
+	err = QueryRecursive(r, db, args, config, &args.Info, &conds, &args.Result)
 	if err != nil {
 		return err
 	}
@@ -121,7 +123,7 @@ func QueryMap(r *http.Request, db *gorm.DB, args *QueryMapArgs, config QueryMapC
 	return nil
 }
 
-func QueryMapRecursive(r *http.Request, db *gorm.DB, args *QueryMapArgs, config QueryMapConfig, info *ModelInfo, conds *params.Conditions, result *[]map[string]any) error {
+func QueryRecursive(r *http.Request, db *gorm.DB, args *QueryArgs, config QueryConfig, info *ModelInfo, conds *params.Conditions, result *[]map[string]any) error {
 	tx := db.Select(strings.Join(info.Select, ","), info.SelectArgs...)
 	tx.Statement.Distinct = info.Distinct
 	if info.Aggregate {
@@ -389,7 +391,7 @@ func QueryMapRecursive(r *http.Request, db *gorm.DB, args *QueryMapArgs, config 
 			}
 			nestedConds.Query += keySetToStr(rel.ModelInfo.Table, rel.References, container.keySet)
 			rows := []map[string]any{}
-			err := QueryMapRecursive(r, db, nil, config, rel.ModelInfo, nestedConds, &rows)
+			err := QueryRecursive(r, db, nil, config, rel.ModelInfo, nestedConds, &rows)
 			if err != nil {
 				return err
 			}

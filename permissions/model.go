@@ -10,29 +10,29 @@ import (
 	"gorm.io/gorm/schema"
 )
 
-type HandlerFunc func(r *http.Request) message.Message
+type HandlerFunc func(r *http.Request) error
 
 type ModelWithPermissionsGet interface {
-	PermissionsGet(r *http.Request) message.Message
+	PermissionsGet(r *http.Request) error
 }
 
 type ModelWithPermissionsPost interface {
-	PermissionsPost(r *http.Request) message.Message
+	PermissionsPost(r *http.Request) error
 }
 
 type ModelWithPermissionsPatch interface {
-	PermissionsPatch(r *http.Request) message.Message
+	PermissionsPatch(r *http.Request) error
 }
 
 type ModelWithPermissionsDelete interface {
-	PermissionsDelete(r *http.Request) message.Message
+	PermissionsDelete(r *http.Request) error
 }
 
 func Get(model interface{}) HandlerFunc {
 	if modelPerm, ok := model.(ModelWithPermissionsGet); ok {
 		return modelPerm.PermissionsGet
 	} else {
-		return func(r *http.Request) message.Message {
+		return func(r *http.Request) error {
 			return message.Forbidden(r)
 		}
 	}
@@ -42,7 +42,7 @@ func Post(model interface{}) HandlerFunc {
 	if modelPerm, ok := model.(ModelWithPermissionsPost); ok {
 		return modelPerm.PermissionsPost
 	} else {
-		return func(r *http.Request) message.Message {
+		return func(r *http.Request) error {
 			return message.Forbidden(r)
 		}
 	}
@@ -52,7 +52,7 @@ func Patch(model interface{}) HandlerFunc {
 	if modelPerm, ok := model.(ModelWithPermissionsPatch); ok {
 		return modelPerm.PermissionsPatch
 	} else {
-		return func(r *http.Request) message.Message {
+		return func(r *http.Request) error {
 			return message.Forbidden(r)
 		}
 	}
@@ -62,23 +62,9 @@ func Delete(model interface{}) HandlerFunc {
 	if modelPerm, ok := model.(ModelWithPermissionsDelete); ok {
 		return modelPerm.PermissionsDelete
 	} else {
-		return func(r *http.Request) message.Message {
+		return func(r *http.Request) error {
 			return message.Forbidden(r)
 		}
-	}
-}
-
-func Merge(permissionFunctions ...HandlerFunc) HandlerFunc {
-	return func(r *http.Request) message.Message {
-		for _, permissionFunc := range permissionFunctions {
-			if permissionFunc != nil {
-				msg := permissionFunc(r)
-				if msg != nil {
-					return msg
-				}
-			}
-		}
-		return nil
 	}
 }
 

@@ -3,9 +3,10 @@ package controller
 import (
 	"api_core/message"
 	"api_core/model"
+	"api_core/permissions"
+	"api_core/registry"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -241,7 +242,7 @@ func ValidateMaps(r *http.Request, jsonMaps []map[string]interface{}, modelType 
 	if err == "" {
 		return nil
 	}
-	return fmt.Errorf(err)
+	return errors.New(err)
 }
 
 func LoadAndValidateMap(r *http.Request, jsonData []byte, jsonMap map[string]interface{}, modelType reflect.Type) error {
@@ -308,4 +309,13 @@ func GetMapKeys(mapToFlatten map[string]interface{}) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+func NewRoute(method, pattern string, handler http.HandlerFunc, permissions ...permissions.HandlerFunc) registry.Route {
+	return registry.Route{
+		Method:      method,
+		Pattern:     pattern,
+		Handler:     handler,
+		Permissions: permissions,
+	}
 }

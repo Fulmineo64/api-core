@@ -9,10 +9,10 @@ import (
 	"strings"
 	"sync"
 
-	"api_core/ctx"
 	"api_core/message"
 	"api_core/model"
 	"api_core/permissions"
+	"api_core/request"
 	"api_core/utils"
 
 	"github.com/go-chi/render"
@@ -72,7 +72,7 @@ func CreateToDb(w http.ResponseWriter, r *http.Request, db *gorm.DB, model inter
 }
 
 func UpdateToDb(w http.ResponseWriter, r *http.Request, model interface{}, values any) error {
-	db := ctx.DB(r).Session(&gorm.Session{CreateBatchSize: 50})
+	db := request.DB(r).Session(&gorm.Session{CreateBatchSize: 50})
 
 	modelSchema, err := schema.Parse(model, &sync.Map{}, db.NamingStrategy)
 	if err != nil {
@@ -117,7 +117,7 @@ func DeleteFromDb(r *http.Request, models []any) error {
 		return nil
 	}
 
-	db := ctx.DB(r)
+	db := request.DB(r)
 	tx := db.Begin()
 
 	modelSchema, err := schema.Parse(models[0], &sync.Map{}, db.NamingStrategy)
@@ -376,7 +376,7 @@ func DeleteModels(db *gorm.DB, models interface{}) (err error) {
 		go func(i int) {
 			w := db.Statement.Context.Value("w").(http.ResponseWriter)
 			r := db.Statement.Context.Value("r").(*http.Request)
-			defer RecoverIfEnabled(w, r)
+			defer request.RecoverIfEnabled(w, r)
 			// TODO: LoadForeignKeys should be placed here
 			res := db.Delete(val.Index(i).Addr().Interface())
 			if res.Error != nil {

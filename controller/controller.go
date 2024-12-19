@@ -1,136 +1,112 @@
 package controller
 
 import (
+	"api_core/app"
+	"api_core/message"
+	"api_core/permissions"
+	"api_core/query"
+	"api_core/registry"
+	"api_core/request"
+	"api_core/utils"
+	"io"
 	"net/http"
 	"reflect"
-	_ "time/tzdata"
+	"strings"
+	"sync"
 
-	"api_core/permissions"
+	"github.com/go-chi/render"
+	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
-type AddRouter interface {
-	AddRoute(method string, name string, permissionsFunc permissions.HandlerFunc, handlersFunc ...http.HandlerFunc)
+// # Controller #
+
+type Controller struct {
+	basePath string
 }
 
-type GetModeler interface {
-	GetModel() any
-	GetModelType() reflect.Type
-
-	NewModel() any
-	NewSliceOfModel() any
-}
-
-type Route struct {
-	Method          string
-	Name            string
-	PermissionsFunc permissions.HandlerFunc
-	HandlerFunc     http.HandlerFunc
-}
-
-type CRUDSController interface {
-	AddRouter
-	GetModeler
-
-	SetBasePath(basePath string)
-	SetEndpointIfAbsent(name string)
-	GetEndpoint() string
-	GetEndpointPath() string
-
-	Get(w http.ResponseWriter, r *http.Request)
-	GetOne(w http.ResponseWriter, r *http.Request)
-	GetStructure(w http.ResponseWriter, r *http.Request)
-	GetRelStructure(w http.ResponseWriter, r *http.Request)
-	Post(w http.ResponseWriter, r *http.Request)
-	Patch(w http.ResponseWriter, r *http.Request)
-	PatchMany(w http.ResponseWriter, r *http.Request)
-	Delete(w http.ResponseWriter, r *http.Request)
-
-	CanImport() bool
-
-	AddCustomRoutes()
-	AdditionalModels() []reflect.Type
-	GetRoutes() []Route
-}
-
-/*type Controller struct {
-	Model    interface{}
-	BasePath string
-	Endpoint string
-	Routes   []types.Route
-}
-
-func (c Controller) NewModel() interface{} {
-	return reflect.New(c.GetModelType()).Interface()
-}
-
-func (c Controller) NewSliceOfModel() interface{} {
-	return reflect.New(reflect.SliceOf(c.GetModelType())).Interface()
-}
-
-func (c Controller) GetModel() interface{} {
-	return c.Model
-}
-
-func (c Controller) GetModelType() reflect.Type {
-	if c.Model == nil {
-		return nil
+func (c Controller) Endpoint(controller any) string {
+	t := reflect.TypeOf(controller)
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
 	}
-	return reflect.Indirect(reflect.ValueOf(c.Model)).Type()
+	return "/" + utils.FirstLower(t.Name())
 }
 
-func (c *Controller) SetBasePath(basePath string) {
-	c.BasePath = basePath
+func (c *Controller) SetBasePath(basePath string) *Controller {
+	c.basePath = basePath
+	return c
 }
 
-func (c *Controller) SetEndpointIfAbsent(name string) {
-	if len(c.Endpoint) > 0 {
-		return
-	}
-	c.Endpoint = name
+func (c Controller) BasePath() string {
+	return c.basePath
 }
 
-func (c Controller) GetEndpoint() string {
-	return c.Endpoint
+func (c Controller) FullPath(controller any) string {
+	return c.BasePath() + "/" + c.Endpoint(controller)
 }
 
-func (c Controller) GetEndpointPath() string {
-	return c.BasePath + "/" + c.Endpoint
+func (c Controller) Routes() []registry.Route {
+	return []registry.Route{}
 }
 
-func (c Controller) Get(w http.ResponseWriter, r *http.Request) {
-	HandleGet(w, r, ctx.DB(r), map[string]interface{}{}, c.NewModel())
+// # Typed controller #
+
+type TypedController[T any] struct {
+	Controller
 }
 
-func (c Controller) GetOne(w http.ResponseWriter, r *http.Request) {
+func (c TypedController[T]) Endpoint(controller any) string {
+	return strings.Split(c.Controller.Endpoint(controller), "[")[0]
+}
+
+func (c TypedController[T]) Model() *T {
+	return new(T)
+}
+
+func (c TypedController[T]) ModelType() reflect.Type {
+	var zero [0]T
+	return reflect.TypeOf(zero).Elem()
+}
+
+func (c TypedController[T]) ModelSlice() []T {
+	return make([]T, 0)
+}
+
+func (c TypedController[T]) Get(w http.ResponseWriter, r *http.Request) {
+	HandleGet(w, r, request.DB(r), map[string]interface{}{}, c.Model())
+}
+
+func (c TypedController[T]) GetOne(w http.ResponseWriter, r *http.Request) {
 	primaries := map[string]interface{}{}
-	err := GetPathParams(r, c.NewModel(), utils.GetPrimaryFields(c.GetModelType()), &primaries)
-	if AbortIfError(w, r, err) {
+	err := GetPathParams(r, c.Model(), utils.GetPrimaryFields(c.ModelType()), &primaries)
+	if request.AbortIfError(w, r, err) {
 		return
 	}
-	err = HandleGet(w, r, ctx.DB(r), primaries, c.NewModel())
-	if AbortIfError(w, r, err) {
+	err = HandleGet(w, r, request.DB(r), primaries, c.Model())
+	if request.AbortIfError(w, r, err) {
 		return
 	}
 }
 
-func (c Controller) GetStructure(w http.ResponseWriter, r *http.Request) {
-	relations := GetRelations(r)
+func (c TypedController[T]) GetStructure(w http.ResponseWriter, r *http.Request) {
+	relations := query.GetRelations(r)
 	splittedRelations := [][]string{}
 	for _, rel := range relations {
 		splittedRelations = append(splittedRelations, strings.Split(rel, "."))
 	}
 
-	modelSchema, err := schema.Parse(c.GetModel(), &sync.Map{}, app.DB.NamingStrategy)
+	modelSchema, err := schema.Parse(c.Model(), &sync.Map{}, app.DB.NamingStrategy)
 	if err != nil {
 		message.InternalServerError(r).Write(w, r)
 		return
 	}
 
-	render.JSON(w, r, structure.GetStructInfo(r, modelSchema, splittedRelations))
+	render.JSON(w, r, GetStructInfo(r, modelSchema, splittedRelations))
 }
 
-func (c Controller) GetRelStructure(w http.ResponseWriter, r *http.Request) {
-	modelSchema, err := schema.Parse(c.GetModel(), &sync.Map{}, app.DB.NamingStrategy)
+func (c TypedController[T]) GetRelStructure(w http.ResponseWriter, r *http.Request) {
+	modelSchema, err := schema.Parse(c.Model(), &sync.Map{}, app.DB.NamingStrategy)
 	if err != nil {
 		message.InternalServerError(r).Write(w, r)
 		return
@@ -151,10 +127,10 @@ func (c Controller) GetRelStructure(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	render.JSON(w, r, structure.GetStructInfo(r, relSchema, [][]string{}))
+	render.JSON(w, r, GetStructInfo(r, relSchema, [][]string{}))
 }
 
-func (c Controller) Post(w http.ResponseWriter, r *http.Request) {
+func (c TypedController[T]) Post(w http.ResponseWriter, r *http.Request) {
 	jsonData, err := io.ReadAll(r.Body)
 
 	if err != nil || len(jsonData) == 0 {
@@ -163,85 +139,85 @@ func (c Controller) Post(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if jsonData[0] == '[' {
-		model := c.NewSliceOfModel()
+		model := c.ModelSlice()
 		msg := LoadModel(r, jsonData, model)
-		if AbortIfError(w, r, msg) {
+		if request.AbortIfError(w, r, msg) {
 			return
 		}
 		msg = ValidateModels(r, model)
-		if AbortIfError(w, r, msg) {
+		if request.AbortIfError(w, r, msg) {
 			return
 		}
-		msg = CreateToDb(w, r, ctx.DB(r), model)
-		if AbortIfError(w, r, msg) {
+		msg = CreateToDb(w, r, request.DB(r), model)
+		if request.AbortIfError(w, r, msg) {
 			return
 		}
 	} else {
-		model := c.NewModel()
+		model := c.Model()
 		msg := LoadModel(r, jsonData, model)
-		if AbortIfError(w, r, msg) {
+		if request.AbortIfError(w, r, msg) {
 			return
 		}
 		msg = ValidateModel(r, model)
-		if AbortIfError(w, r, msg) {
+		if request.AbortIfError(w, r, msg) {
 			return
 		}
-		msg = CreateToDb(w, r, ctx.DB(r), model)
-		if AbortIfError(w, r, msg) {
+		msg = CreateToDb(w, r, request.DB(r), model)
+		if request.AbortIfError(w, r, msg) {
 			return
 		}
 	}
 }
 
-func (c Controller) Patch(w http.ResponseWriter, r *http.Request) {
-	model := c.NewModel()
+func (c TypedController[T]) PatchOne(w http.ResponseWriter, r *http.Request) {
+	model := c.Model()
 	jsonMap := make(map[string]interface{})
 	jsonData, _ := io.ReadAll(r.Body)
-	modelType := c.GetModelType()
+	modelType := c.ModelType()
 	primaryFields := utils.GetPrimaryFields(modelType)
 
-	msg := LoadModel(r, jsonData, model)
-	if AbortIfError(w, r, msg) {
+	err := LoadModel(r, jsonData, model)
+	if request.AbortIfError(w, r, err) {
 		return
 	}
-	msg = GetPathParams(r, model, primaryFields, model)
-	if AbortIfError(w, r, msg) {
+	err = GetPathParams(r, model, primaryFields, model)
+	if request.AbortIfError(w, r, err) {
 		return
 	}
-	msg = LoadAndValidateMap(r, jsonData, jsonMap, modelType)
-	if AbortIfError(w, r, msg) {
+	err = LoadAndValidateMap(r, jsonData, jsonMap, modelType)
+	if request.AbortIfError(w, r, err) {
 		return
 	}
-	msg = GetPathParams(r, model, primaryFields, &jsonMap)
-	if AbortIfError(w, r, msg) {
+	err = GetPathParams(r, model, primaryFields, &jsonMap)
+	if request.AbortIfError(w, r, err) {
 		return
 	}
-	msg = UpdateToDb(w, r, model, jsonMap)
-	if AbortIfError(w, r, msg) {
+	err = UpdateToDb(w, r, model, jsonMap)
+	if request.AbortIfError(w, r, err) {
 		return
 	}
 }
 
-func (c Controller) PatchMany(w http.ResponseWriter, r *http.Request) {
-	modelSlice := c.NewSliceOfModel()
+func (c TypedController[T]) Patch(w http.ResponseWriter, r *http.Request) {
+	modelSlice := c.ModelSlice()
 	jsonMaps := []map[string]interface{}{}
 	jsonData, _ := io.ReadAll(r.Body)
-	modelType := c.GetModelType()
+	modelType := c.ModelType()
 
 	msg := LoadModel(r, jsonData, modelSlice)
-	if AbortIfError(w, r, msg) {
+	if request.AbortIfError(w, r, msg) {
 		return
 	}
 	msg = LoadAndValidateMaps(r, jsonData, &jsonMaps, modelType)
-	if AbortIfError(w, r, msg) {
+	if request.AbortIfError(w, r, msg) {
 		return
 	}
 	msg = ValidateMapsPrimaries(r, jsonMaps, utils.GetPrimaryFields(modelType))
-	if AbortIfError(w, r, msg) {
+	if request.AbortIfError(w, r, msg) {
 		return
 	}
 	if len(jsonMaps) > 0 {
-		db := ctx.DB(r).Session(&gorm.Session{CreateBatchSize: 50})
+		db := request.DB(r).Session(&gorm.Session{CreateBatchSize: 50})
 
 		modelSliceVal := reflect.ValueOf(modelSlice).Elem()
 
@@ -253,8 +229,8 @@ func (c Controller) PatchMany(w http.ResponseWriter, r *http.Request) {
 
 		checked := map[string]struct{}{}
 		for i := range jsonMaps {
-			err := CheckModelPermissions(r, modelSliceVal.Index(i), modelSchema, checked, true)
-			if AbortIfError(w, r, err) {
+			err := permissions.CheckModel(r, modelSliceVal.Index(i), modelSchema, checked, true)
+			if request.AbortIfError(w, r, err) {
 				return
 			}
 		}
@@ -282,27 +258,118 @@ func (c Controller) PatchMany(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, modelSlice)
 }
 
-func (c Controller) Delete(r *http.Request) {
-	primaryFields := utils.GetPrimaryFields(c.GetModelType())
+func (c TypedController[T]) Delete(w http.ResponseWriter, r *http.Request) {
+	primaryFields := utils.GetPrimaryFields(c.ModelType())
 	models := []interface{}{}
-	PathParamsToModels(r, c.GetModelType(), primaryFields, &models)
-	DeleteFromDb(r, models)
+	err := pathParamsToModels(r, c.ModelType(), primaryFields, &models)
+	if request.AbortIfError(w, r, err) {
+		return
+	}
+	err = DeleteFromDb(r, models)
+	if request.AbortIfError(w, r, err) {
+		return
+	}
 }
 
-func (c *Controller) CanImport() bool {
-	return false
+func pathParamsToModels(r *http.Request, modelType reflect.Type, fields []string, destination *[]interface{}) error {
+	var values = make([][]string, len(fields))
+	for i, field := range fields {
+		_, found := modelType.FieldByName(field)
+		val := r.URL.Query().Get(field)
+		values[i] = strings.Split(val, ",")
+		if len(val) == 0 || !found || (i > 0 && len(values[i]) != len(values[i-1])) {
+			return message.InvalidUrlParameter(r, field)
+		}
+	}
+
+	for i := 0; i < len(values[0]); i++ {
+		item := reflect.New(modelType).Elem()
+		for j, field := range fields {
+			msg := assignValue(r, item.FieldByName(field), field, values[j][i], item)
+			if msg != nil {
+				return msg
+			}
+		}
+		*destination = append(*destination, item.Addr().Interface())
+	}
+	return nil
 }
 
-func (c *Controller) AddRoute(method string, name string, permissionsFunc permissions.HandlerFunc, handlerFunc http.HandlerFunc) {
-	c.Routes = append(c.Routes, types.Route{Method: method, Name: name, PermissionsFunc: permissionsFunc, HandlerFunc: handlerFunc})
+func (c TypedController[T]) Routes() []registry.Route {
+	routes := []registry.Route{}
+	var mdl any = *c.Model()
+	modelType := c.ModelType()
+	if modelType != nil {
+		primaryFields := utils.GetPrimaryFields(modelType)
+		params := ""
+		for i, field := range primaryFields {
+			if i > 0 {
+				params += "/"
+			}
+			params += "{" + field + "}"
+		}
+
+		if m, ok := mdl.(permissions.ModelWithPermissionsGet); ok {
+			permissions := []permissions.HandlerFunc{m.PermissionsGet}
+			routes = append(routes, registry.Route{
+				Method:      http.MethodGet,
+				Pattern:     "/",
+				Permissions: permissions,
+				Handler:     c.Get,
+			})
+			if len(primaryFields) > 0 {
+				routes = append(routes, registry.Route{
+					Method:      http.MethodGet,
+					Pattern:     "/" + params,
+					Permissions: permissions,
+					Handler:     c.GetOne,
+				})
+			}
+			routes = append(routes, registry.Route{
+				Method:      http.MethodGet,
+				Pattern:     "/structure",
+				Permissions: permissions,
+				Handler:     c.GetStructure,
+			}, registry.Route{
+				Method:      http.MethodGet,
+				Pattern:     "/structure/{rel}",
+				Permissions: permissions,
+				Handler:     c.GetRelStructure,
+			})
+		}
+		if m, ok := mdl.(permissions.ModelWithPermissionsPost); ok {
+			permissions := []permissions.HandlerFunc{m.PermissionsPost}
+			routes = append(routes, registry.Route{
+				Method:      http.MethodPost,
+				Pattern:     "/",
+				Permissions: permissions,
+				Handler:     c.Post,
+			})
+		}
+		if m, ok := mdl.(permissions.ModelWithPermissionsPatch); ok {
+			permissions := []permissions.HandlerFunc{m.PermissionsPatch}
+			routes = append(routes, registry.Route{
+				Method:      http.MethodPost,
+				Pattern:     "/",
+				Permissions: permissions,
+				Handler:     c.Patch,
+			})
+			routes = append(routes, registry.Route{
+				Method:      http.MethodPost,
+				Pattern:     "/" + params,
+				Permissions: permissions,
+				Handler:     c.PatchOne,
+			})
+		}
+		if m, ok := mdl.(permissions.ModelWithPermissionsDelete); ok {
+			permissions := []permissions.HandlerFunc{m.PermissionsDelete}
+			routes = append(routes, registry.Route{
+				Method:      http.MethodPost,
+				Pattern:     "/" + params,
+				Permissions: permissions,
+				Handler:     c.Delete,
+			})
+		}
+	}
+	return routes
 }
-
-func (c Controller) AddCustomRoutes() {}
-
-func (c Controller) AdditionalModels() []reflect.Type {
-	return []reflect.Type{}
-}
-
-func (c Controller) GetRoutes() []types.Route {
-	return c.Routes
-}*/
