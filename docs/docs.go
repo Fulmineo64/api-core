@@ -105,6 +105,7 @@ type DocsOptions struct {
 	Name        string
 	Description string
 	Version     string
+	Servers     []OpenAPIV3Server
 }
 
 func GetDocs(r *http.Request, options DocsOptions) OpenAPIV3 {
@@ -115,16 +116,10 @@ func GetDocs(r *http.Request, options DocsOptions) OpenAPIV3 {
 			options.Description,
 			utils.Coalesce(options.Version, "1.0.0"),
 		},
-		Servers: []OpenAPIV3Server{
-			{
-				"../",
-				"Current server",
-			},
-			{
-				"https://next.bp2.it/api",
-				"Testing server",
-			},
-		},
+		Servers: append(
+			[]OpenAPIV3Server{{"../", "Current server"}},
+			options.Servers...,
+		),
 		Paths: map[string]map[string]OpenAPIV3Route{},
 		Components: map[string]interface{}{
 			"securitySchemes": map[string]OpenAPIV3SecurityScheme{
@@ -267,7 +262,7 @@ func GetDocs(r *http.Request, options DocsOptions) OpenAPIV3 {
 
 	for _, controller := range registry.ControllerByName {
 		for _, route := range controller.Routes() {
-			if route.Permissions != nil && len(route.Permissions) > 0 && (!hasSession || permissions.Validate(r, route.Permissions...) != nil) {
+			if len(route.Permissions) > 0 && (!hasSession || permissions.Validate(r, route.Permissions...) != nil) {
 				continue
 			}
 
@@ -342,9 +337,11 @@ func GetDocs(r *http.Request, options DocsOptions) OpenAPIV3 {
 	return docs
 }
 
-func GetDocsHandler(docsFs *embed.FS, options DocsOptions) http.HandlerFunc {
+func DocsHandler(options DocsOptions) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-
+		if r.RequestURI == "/docs" {
+			http.Redirect(w, r, "docs/index.html", http.StatusMovedPermanently)
+		}
 		url := "public" + r.RequestURI
 		var contentType string
 
@@ -361,7 +358,7 @@ func GetDocsHandler(docsFs *embed.FS, options DocsOptions) http.HandlerFunc {
 		if strings.HasSuffix(url, "/docs.json") {
 			render.JSON(w, r, GetDocs(r, options))
 		} else {
-			f, err := docsFs.Open(url)
+			f, err := DocsFs.Open(url)
 			if err != nil {
 				// messages.FileNotFound(c).Abort(c)
 				return
@@ -383,6 +380,7 @@ func GetDocsHandler(docsFs *embed.FS, options DocsOptions) http.HandlerFunc {
 }
 
 func endpointToTag(apiName string) string {
+	apiName = strings.TrimPrefix(apiName, "/")
 	apiName = strings.Title(apiName)
 	apiName = strings.ReplaceAll(apiName, "/", " -")
 	apiName = strings.Replace(apiName, "-", "", 1)

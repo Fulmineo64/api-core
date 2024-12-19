@@ -60,6 +60,10 @@ func (c TypedController[T]) Endpoint(controller any) string {
 	return strings.Split(c.Controller.Endpoint(controller), "[")[0]
 }
 
+func (c TypedController[T]) FullPath(controller any) string {
+	return c.BasePath() + "/" + c.Endpoint(controller)
+}
+
 func (c TypedController[T]) Model() *T {
 	return new(T)
 }

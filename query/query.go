@@ -74,7 +74,7 @@ func Query(r *http.Request, db *gorm.DB, args *QueryArgs, config QueryConfig) er
 	if len(args.Primaries) > 0 {
 		newPrimaries := map[string]interface{}{}
 		for key, val := range args.Primaries {
-			newPrimaries[args.Info.Table+"."+key] = val
+			newPrimaries[args.Info.Table+"."+db.NamingStrategy.ColumnName(args.Info.Table, key)] = val
 		}
 		args.Primaries = newPrimaries
 	}

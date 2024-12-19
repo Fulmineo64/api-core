@@ -31,5 +31,8 @@ func RegisterTypedController[T any](name string, c TypedController[T]) {
 }
 
 func RegisterModel(name string, m any) {
+	if ModelByName[name] != nil {
+		panic("Model " + name + " is already registered. To override it please specify an override level.")
+	}
 	ModelByName[name] = m
 }
