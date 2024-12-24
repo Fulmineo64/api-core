@@ -10,7 +10,6 @@ import (
 	"unicode"
 
 	"api_core/registry"
-	"api_core/request"
 	"api_core/utils"
 
 	"github.com/go-chi/render"
@@ -254,12 +253,13 @@ func GetDocs(r *http.Request, options DocsOptions) OpenAPIV3 {
 		},
 	}
 
-	hasSession := request.Session(r) != nil
+	// TODO: Restore hasSessions when all routes are authenticated
+	/*hasSession := request.Session(r) != nil*/
 	pathParamsReg := regexp.MustCompile(`{(\w+)}`)
 
 	for _, controller := range registry.ControllerByName {
 		for _, route := range controller.Routes() {
-			if len(route.Permissions) > 0 && (!hasSession || route.Validate(r) != nil) {
+			if len(route.Permissions) > 0 && /*(!hasSession ||*/ route.Validate(r) != nil /*)*/ {
 				continue
 			}
 

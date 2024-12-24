@@ -79,7 +79,10 @@ func (c TypedController[T]) ModelSlice() []T {
 }
 
 func (c TypedController[T]) Get(w http.ResponseWriter, r *http.Request) {
-	HandleGet(w, r, request.DB(r), map[string]interface{}{}, c.Model())
+	err := HandleGet(w, r, request.DB(r), map[string]interface{}{}, c.Model())
+	if request.AbortIfError(w, r, err) {
+		return
+	}
 }
 
 func (c TypedController[T]) GetOne(w http.ResponseWriter, r *http.Request) {

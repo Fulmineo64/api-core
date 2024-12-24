@@ -19,13 +19,13 @@ var provider = dbSessionProvider{}
 var no404Logger = logger.New(log.New(os.Stdout, "\r\n", log.LstdFlags), logger.Config{SlowThreshold: 200 * time.Millisecond, Colorful: true, IgnoreRecordNotFoundError: true, LogLevel: logger.Warn})
 
 type SessionModel struct {
-	KEY        string `gorm:"primaryKey"`
-	EXPIRES_AT time.Time
-	PROPERTIES string `gorm:"type:text"`
+	Key        string `gorm:"primaryKey"`
+	ExpiresAt  time.Time
+	Properties string `gorm:"type:text"`
 }
 
 func (s SessionModel) TableName() string {
-	return "SESSIONS"
+	return "sessions"
 }
 
 type Session struct {
@@ -91,31 +91,31 @@ type dbSessionProvider struct{}
 
 func (sp *dbSessionProvider) retrieve(key string) *Session {
 	session := SessionModel{}
-	result := DB.Session(&gorm.Session{Logger: no404Logger}).First(&session, "\"KEY\" = ?", key)
+	result := DB.Session(&gorm.Session{Logger: no404Logger}).First(&session, "\"key\" = ?", key)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return nil
 	}
 	var properties map[string]interface{}
-	json.Unmarshal([]byte(session.PROPERTIES), &properties)
-	return &Session{properties, session.EXPIRES_AT}
+	json.Unmarshal([]byte(session.Properties), &properties)
+	return &Session{properties, session.ExpiresAt}
 }
 
 func (sp *dbSessionProvider) store(key string, s *Session) {
 	props, _ := json.Marshal(s.properties)
 	session := SessionModel{
-		KEY:        key,
-		EXPIRES_AT: s.expiresAt,
-		PROPERTIES: string(props),
+		Key:        key,
+		ExpiresAt:  s.expiresAt,
+		Properties: string(props),
 	}
 	DB.Session(&gorm.Session{Logger: no404Logger}).Save(session)
 }
 
 func (sp *dbSessionProvider) delete(key string) {
-	DB.Where("\"KEY\" = ?", key).Delete(&SessionModel{})
+	DB.Where("\"key\" = ?", key).Delete(&SessionModel{})
 }
 
 func (sp *dbSessionProvider) clearExpired() {
-	DB.Where("EXPIRES_AT < ?", time.Now()).Delete(&SessionModel{})
+	DB.Where("expires_at < ?", time.Now()).Delete(&SessionModel{})
 }
 
 // Functions
