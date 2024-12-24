@@ -19,8 +19,6 @@ import (
 //go:embed public/*
 var DocsFs embed.FS
 
-// TODO: Use DocsFS
-
 type OpenAPIV3 struct {
 	Openapi      string                               `json:"openapi"`
 	Info         OpenAPIV3Info                        `json:"info"`
@@ -380,7 +378,6 @@ func DocsHandler(options DocsOptions) http.HandlerFunc {
 
 func endpointToTag(apiName string) string {
 	apiName = strings.TrimPrefix(apiName, "/")
-	apiName = strings.Title(apiName)
 	apiName = strings.ReplaceAll(apiName, "/", " -")
 	apiName = strings.Replace(apiName, "-", "", 1)
 	var parts []string

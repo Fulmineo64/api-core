@@ -43,6 +43,14 @@
         url: "docs.json",
         dom_id: '#swagger-ui',
         deepLinking: true,
+        displayRequestDuration: true,
+        docExpansion: "none",
+        filter: true,
+        syntaxHighlight: {
+          activated: true, 
+          theme: "agate"
+        },
+        tryItOutEnabled: true,
         presets: [
           SwaggerUIBundle.presets.apis,
           SwaggerUIStandalonePreset
@@ -63,7 +71,7 @@
           if (res.ok && res.url.endsWith('/v1/auth/login')) {
             window.ui.getSystem().specActions.download()
           }
-        }
+        },
       });
       // End Swagger UI call region
 
