@@ -9,7 +9,6 @@ import (
 	"strings"
 	"unicode"
 
-	"api_core/permissions"
 	"api_core/registry"
 	"api_core/request"
 	"api_core/utils"
@@ -262,7 +261,7 @@ func GetDocs(r *http.Request, options DocsOptions) OpenAPIV3 {
 
 	for _, controller := range registry.ControllerByName {
 		for _, route := range controller.Routes() {
-			if len(route.Permissions) > 0 && (!hasSession || permissions.Validate(r, route.Permissions...) != nil) {
+			if len(route.Permissions) > 0 && (!hasSession || route.Validate(r) != nil) {
 				continue
 			}
 

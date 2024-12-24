@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
@@ -279,7 +280,7 @@ func pathParamsToModels(r *http.Request, modelType reflect.Type, fields []string
 	var values = make([][]string, len(fields))
 	for i, field := range fields {
 		_, found := modelType.FieldByName(field)
-		val := r.URL.Query().Get(field)
+		val := chi.URLParam(r, field)
 		values[i] = strings.Split(val, ",")
 		if len(val) == 0 || !found || (i > 0 && len(values[i]) != len(values[i-1])) {
 			return message.InvalidUrlParameter(r, field)
@@ -304,76 +305,103 @@ func (c TypedController[T]) Routes() []registry.Route {
 	var mdl any = *c.Model()
 	modelType := c.ModelType()
 	if modelType != nil {
-		primaryFields := utils.GetPrimaryFields(modelType)
-		params := ""
-		for i, field := range primaryFields {
-			if i > 0 {
-				params += "/"
-			}
-			params += "{" + field + "}"
-		}
+		urlPrimaryFields := PrimaryFieldsToURL(utils.GetPrimaryFields(modelType))
+		routes = append(routes, ModelRoutesGet(c, mdl, urlPrimaryFields)...)
+		routes = append(routes, ModelRoutesPost(c, mdl, urlPrimaryFields)...)
+		routes = append(routes, ModelRoutesPatch(c, mdl, urlPrimaryFields)...)
+		routes = append(routes, ModelRoutesDelete(c, mdl, urlPrimaryFields)...)
+	}
+	return routes
+}
 
-		if m, ok := mdl.(permissions.ModelWithPermissionsGet); ok {
-			permissions := []permissions.HandlerFunc{m.PermissionsGet}
+func PrimaryFieldsToURL(primaryFields []string) string {
+	params := ""
+	for i, field := range primaryFields {
+		if i > 0 {
+			params += "/"
+		}
+		params += "{" + field + "}"
+	}
+	return params
+}
+
+func ModelRoutesGet(c registry.RestControllerGet, mdl any, urlPrimaryFields string) []registry.Route {
+	routes := []registry.Route{}
+	if m, ok := mdl.(permissions.ModelWithPermissionsGet); ok {
+		permissions := []permissions.HandlerFunc{m.PermissionsGet}
+		routes = append(routes, registry.Route{
+			Method:      http.MethodGet,
+			Pattern:     "/",
+			Permissions: permissions,
+			Handler:     c.Get,
+		})
+		if len(urlPrimaryFields) > 0 {
 			routes = append(routes, registry.Route{
 				Method:      http.MethodGet,
-				Pattern:     "/",
+				Pattern:     "/" + urlPrimaryFields,
 				Permissions: permissions,
-				Handler:     c.Get,
-			})
-			if len(primaryFields) > 0 {
-				routes = append(routes, registry.Route{
-					Method:      http.MethodGet,
-					Pattern:     "/" + params,
-					Permissions: permissions,
-					Handler:     c.GetOne,
-				})
-			}
-			routes = append(routes, registry.Route{
-				Method:      http.MethodGet,
-				Pattern:     "/structure",
-				Permissions: permissions,
-				Handler:     c.GetStructure,
-			}, registry.Route{
-				Method:      http.MethodGet,
-				Pattern:     "/structure/{rel}",
-				Permissions: permissions,
-				Handler:     c.GetRelStructure,
+				Handler:     c.GetOne,
 			})
 		}
-		if m, ok := mdl.(permissions.ModelWithPermissionsPost); ok {
-			permissions := []permissions.HandlerFunc{m.PermissionsPost}
-			routes = append(routes, registry.Route{
-				Method:      http.MethodPost,
-				Pattern:     "/",
-				Permissions: permissions,
-				Handler:     c.Post,
-			})
-		}
-		if m, ok := mdl.(permissions.ModelWithPermissionsPatch); ok {
-			permissions := []permissions.HandlerFunc{m.PermissionsPatch}
-			routes = append(routes, registry.Route{
-				Method:      http.MethodPost,
-				Pattern:     "/",
-				Permissions: permissions,
-				Handler:     c.Patch,
-			})
-			routes = append(routes, registry.Route{
-				Method:      http.MethodPost,
-				Pattern:     "/" + params,
-				Permissions: permissions,
-				Handler:     c.PatchOne,
-			})
-		}
-		if m, ok := mdl.(permissions.ModelWithPermissionsDelete); ok {
-			permissions := []permissions.HandlerFunc{m.PermissionsDelete}
-			routes = append(routes, registry.Route{
-				Method:      http.MethodPost,
-				Pattern:     "/" + params,
-				Permissions: permissions,
-				Handler:     c.Delete,
-			})
-		}
+		routes = append(routes, registry.Route{
+			Method:      http.MethodGet,
+			Pattern:     "/structure",
+			Permissions: permissions,
+			Handler:     c.GetStructure,
+		}, registry.Route{
+			Method:      http.MethodGet,
+			Pattern:     "/structure/{rel}",
+			Permissions: permissions,
+			Handler:     c.GetRelStructure,
+		})
+	}
+	return routes
+}
+
+func ModelRoutesPost(c registry.RestControllerPost, mdl any, urlPrimaryFields string) []registry.Route {
+	routes := []registry.Route{}
+	if m, ok := mdl.(permissions.ModelWithPermissionsPost); ok {
+		permissions := []permissions.HandlerFunc{m.PermissionsPost}
+		routes = append(routes, registry.Route{
+			Method:      http.MethodPost,
+			Pattern:     "/",
+			Permissions: permissions,
+			Handler:     c.Post,
+		})
+	}
+	return routes
+}
+
+func ModelRoutesPatch(c registry.RestControllerPatch, mdl any, urlPrimaryFields string) []registry.Route {
+	routes := []registry.Route{}
+	if m, ok := mdl.(permissions.ModelWithPermissionsPatch); ok {
+		permissions := []permissions.HandlerFunc{m.PermissionsPatch}
+		routes = append(routes, registry.Route{
+			Method:      http.MethodPatch,
+			Pattern:     "/",
+			Permissions: permissions,
+			Handler:     c.Patch,
+		})
+		routes = append(routes, registry.Route{
+			Method:      http.MethodPatch,
+			Pattern:     "/" + urlPrimaryFields,
+			Permissions: permissions,
+			Handler:     c.PatchOne,
+		})
+	}
+	return routes
+}
+
+func ModelRoutesDelete(c registry.RestControllerDelete, mdl any, urlPrimaryFields string) []registry.Route {
+	routes := []registry.Route{}
+	if m, ok := mdl.(permissions.ModelWithPermissionsDelete); ok {
+		permissions := []permissions.HandlerFunc{m.PermissionsDelete}
+		routes = append(routes, registry.Route{
+			Method:      http.MethodDelete,
+			Pattern:     "/" + urlPrimaryFields,
+			Permissions: permissions,
+			Handler:     c.Delete,
+		})
 	}
 	return routes
 }

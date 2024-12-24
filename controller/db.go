@@ -128,10 +128,8 @@ func DeleteFromDb(r *http.Request, models []any) error {
 	for _, mdl := range models {
 		tx := tx.Session(&gorm.Session{SkipDefaultTransaction: true})
 
-		table := mdl.(model.TableModel).TableName()
-
 		if condMdl, ok := mdl.(model.ConditionsModel); ok {
-			query, args := condMdl.DefaultConditions(db, table)
+			query, args := condMdl.DefaultConditions(db, modelSchema.Table)
 			if query != "" {
 				tx = tx.Where("("+query+")", args...)
 			}

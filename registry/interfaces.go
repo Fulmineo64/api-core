@@ -19,6 +19,10 @@ type Route struct {
 	Permissions []permissions.HandlerFunc
 }
 
+func (rt Route) Validate(r *http.Request) error {
+	return permissions.Validate(r, rt.Permissions...)
+}
+
 type Router interface {
 	Routes() []Route
 }
@@ -34,16 +38,32 @@ type Modeler[T any] interface {
 	ModelType() reflect.Type
 }
 
-/*type RestController interface {
+type RestControllerGet interface {
 	Get(w http.ResponseWriter, r *http.Request)
 	GetOne(w http.ResponseWriter, r *http.Request)
 	GetStructure(w http.ResponseWriter, r *http.Request)
 	GetRelStructure(w http.ResponseWriter, r *http.Request)
+}
+
+type RestControllerPost interface {
 	Post(w http.ResponseWriter, r *http.Request)
+}
+
+type RestControllerPatch interface {
 	Patch(w http.ResponseWriter, r *http.Request)
 	PatchOne(w http.ResponseWriter, r *http.Request)
+}
+
+type RestControllerDelete interface {
 	Delete(w http.ResponseWriter, r *http.Request)
-}*/
+}
+
+type RestController interface {
+	RestControllerGet
+	RestControllerPost
+	RestControllerPatch
+	RestControllerDelete
+}
 
 type TypedController[T any] interface {
 	BasicController
