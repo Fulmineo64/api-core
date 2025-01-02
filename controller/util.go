@@ -1,10 +1,8 @@
 package controller
 
 import (
-	"api_core/interfaces"
 	"api_core/message"
 	"api_core/model"
-	"api_core/permissions"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -309,13 +307,4 @@ func GetMapKeys(mapToFlatten map[string]interface{}) []string {
 		keys = append(keys, k)
 	}
 	return keys
-}
-
-func NewRoute(method, pattern string, handler http.HandlerFunc, permissions permissions.HandlerFunc) interfaces.Route {
-	return interfaces.Route{
-		Method:      method,
-		Pattern:     pattern,
-		Handler:     handler,
-		Permissions: permissions,
-	}
 }

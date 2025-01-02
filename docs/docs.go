@@ -7,7 +7,6 @@ import (
 	"path"
 	"regexp"
 	"strings"
-	"unicode"
 
 	"api_core/registry"
 	"api_core/utils"
@@ -374,19 +373,7 @@ func DocsHandler(options DocsOptions) http.HandlerFunc {
 }
 
 func endpointToTag(apiName string) string {
+	apiName = strings.TrimSpace(apiName)
 	apiName = strings.TrimPrefix(apiName, "/")
-	apiName = strings.ReplaceAll(apiName, "/", " -")
-	apiName = strings.Replace(apiName, "-", "", 1)
-	var parts []string
-	start := 0
-	for end, r := range apiName {
-		if end != 0 && unicode.IsUpper(r) {
-			parts = append(parts, apiName[start:end])
-			start = end
-		}
-	}
-	if start != len(apiName) {
-		parts = append(parts, apiName[start:])
-	}
-	return strings.Join(parts, " ")
+	return apiName
 }

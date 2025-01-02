@@ -7,6 +7,7 @@ import (
 	"api_core/permissions"
 	"api_core/query"
 	"api_core/request"
+	"api_core/route"
 	"api_core/utils"
 	"io"
 	"net/http"
@@ -20,13 +21,13 @@ import (
 	"gorm.io/gorm/schema"
 )
 
-// # Controller #
+// # BasicController #
 
-type Controller struct {
+type BasicController struct {
 	basePath string
 }
 
-func (c Controller) Endpoint(controller any) string {
+func (c BasicController) Endpoint(controller any) string {
 	t := reflect.TypeOf(controller)
 	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
@@ -34,35 +35,43 @@ func (c Controller) Endpoint(controller any) string {
 	return "/" + utils.FirstLower(t.Name())
 }
 
-func (c *Controller) SetBasePath(basePath string) *Controller {
+func (c *BasicController) SetBasePath(basePath string) *BasicController {
 	c.basePath = basePath
 	return c
 }
 
-func (c Controller) BasePath() string {
+func (c BasicController) BasePath() string {
 	return c.basePath
 }
 
-func (c Controller) FullPath(controller any) string {
-	return c.BasePath() + "/" + c.Endpoint(controller)
+func (c BasicController) FullPath(controller any) string {
+	basePath := c.BasePath()
+	if basePath == "" {
+		return c.Endpoint(controller)
+	}
+	return basePath + "/" + c.Endpoint(controller)
 }
 
-func (c Controller) Routes() []interfaces.Route {
-	return []interfaces.Route{}
+func (c BasicController) Routes() []route.Route {
+	return []route.Route{}
 }
 
 // # Typed controller #
 
 type TypedController[T any] struct {
-	Controller
+	BasicController
 }
 
 func (c TypedController[T]) Endpoint(controller any) string {
-	return strings.Split(c.Controller.Endpoint(controller), "[")[0]
+	return strings.Split(c.BasicController.Endpoint(controller), "[")[0]
 }
 
 func (c TypedController[T]) FullPath(controller any) string {
-	return c.BasePath() + "/" + c.Endpoint(controller)
+	basePath := c.BasePath()
+	if basePath == "" {
+		return c.Endpoint(controller)
+	}
+	return basePath + "/" + c.Endpoint(controller)
 }
 
 func (c TypedController[T]) Model() *T {
@@ -303,8 +312,8 @@ func pathParamsToModels(r *http.Request, modelType reflect.Type, fields []string
 	return nil
 }
 
-func (c TypedController[T]) Routes() []interfaces.Route {
-	routes := []interfaces.Route{}
+func (c TypedController[T]) Routes() []route.Route {
+	routes := []route.Route{}
 	var mdl any = *c.Model()
 	modelType := c.ModelType()
 	if modelType != nil {
@@ -328,30 +337,30 @@ func PrimaryFieldsToURL(primaryFields []string) string {
 	return params
 }
 
-func ModelRoutesGet(c interfaces.RestControllerGet, mdl any, urlPrimaryFields string) []interfaces.Route {
-	routes := []interfaces.Route{}
+func ModelRoutesGet(c interfaces.RestControllerGet, mdl any, urlPrimaryFields string) []route.Route {
+	routes := []route.Route{}
 	if m, ok := mdl.(permissions.ModelWithPermissionsGet); ok {
 		permissions := m.PermissionsGet
-		routes = append(routes, interfaces.Route{
+		routes = append(routes, route.Route{
 			Method:      http.MethodGet,
 			Pattern:     "/",
 			Permissions: permissions,
 			Handler:     c.Get,
 		})
 		if len(urlPrimaryFields) > 0 {
-			routes = append(routes, interfaces.Route{
+			routes = append(routes, route.Route{
 				Method:      http.MethodGet,
 				Pattern:     "/" + urlPrimaryFields,
 				Permissions: permissions,
 				Handler:     c.GetOne,
 			})
 		}
-		routes = append(routes, interfaces.Route{
+		routes = append(routes, route.Route{
 			Method:      http.MethodGet,
 			Pattern:     "/structure",
 			Permissions: permissions,
 			Handler:     c.GetStructure,
-		}, interfaces.Route{
+		}, route.Route{
 			Method:      http.MethodGet,
 			Pattern:     "/structure/{rel}",
 			Permissions: permissions,
@@ -361,11 +370,11 @@ func ModelRoutesGet(c interfaces.RestControllerGet, mdl any, urlPrimaryFields st
 	return routes
 }
 
-func ModelRoutesPost(c interfaces.RestControllerPost, mdl any, urlPrimaryFields string) []interfaces.Route {
-	routes := []interfaces.Route{}
+func ModelRoutesPost(c interfaces.RestControllerPost, mdl any, urlPrimaryFields string) []route.Route {
+	routes := []route.Route{}
 	if m, ok := mdl.(permissions.ModelWithPermissionsPost); ok {
 		permissions := m.PermissionsPost
-		routes = append(routes, interfaces.Route{
+		routes = append(routes, route.Route{
 			Method:      http.MethodPost,
 			Pattern:     "/",
 			Permissions: permissions,
@@ -375,17 +384,17 @@ func ModelRoutesPost(c interfaces.RestControllerPost, mdl any, urlPrimaryFields 
 	return routes
 }
 
-func ModelRoutesPatch(c interfaces.RestControllerPatch, mdl any, urlPrimaryFields string) []interfaces.Route {
-	routes := []interfaces.Route{}
+func ModelRoutesPatch(c interfaces.RestControllerPatch, mdl any, urlPrimaryFields string) []route.Route {
+	routes := []route.Route{}
 	if m, ok := mdl.(permissions.ModelWithPermissionsPatch); ok {
 		permissions := m.PermissionsPatch
-		routes = append(routes, interfaces.Route{
+		routes = append(routes, route.Route{
 			Method:      http.MethodPatch,
 			Pattern:     "/",
 			Permissions: permissions,
 			Handler:     c.Patch,
 		})
-		routes = append(routes, interfaces.Route{
+		routes = append(routes, route.Route{
 			Method:      http.MethodPatch,
 			Pattern:     "/" + urlPrimaryFields,
 			Permissions: permissions,
@@ -395,11 +404,11 @@ func ModelRoutesPatch(c interfaces.RestControllerPatch, mdl any, urlPrimaryField
 	return routes
 }
 
-func ModelRoutesDelete(c interfaces.RestControllerDelete, mdl any, urlPrimaryFields string) []interfaces.Route {
-	routes := []interfaces.Route{}
+func ModelRoutesDelete(c interfaces.RestControllerDelete, mdl any, urlPrimaryFields string) []route.Route {
+	routes := []route.Route{}
 	if m, ok := mdl.(permissions.ModelWithPermissionsDelete); ok {
 		permissions := m.PermissionsDelete
-		routes = append(routes, interfaces.Route{
+		routes = append(routes, route.Route{
 			Method:      http.MethodDelete,
 			Pattern:     "/" + urlPrimaryFields,
 			Permissions: permissions,

@@ -1,7 +1,7 @@
 package interfaces
 
 import (
-	"api_core/permissions"
+	"api_core/route"
 	"net/http"
 	"reflect"
 )
@@ -12,21 +12,8 @@ type Endpointer interface {
 	FullPath(controller any) string
 }
 
-type Route struct {
-	Method      string
-	Pattern     string
-	Public      bool
-	Handler     http.HandlerFunc
-	Permissions permissions.HandlerFunc
-}
-
-func (rt Route) Authenticate(r *http.Request) error {
-	// TODO: Apply authentication here
-	return permissions.Validate(r, rt.Permissions)
-}
-
 type Router interface {
-	Routes() []Route
+	Routes() []route.Route
 }
 
 type BasicController interface {

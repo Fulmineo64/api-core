@@ -28,6 +28,9 @@ func Clear() {
 
 func Validate(r *http.Request, permissions ...HandlerFunc) error {
 	for _, permission := range permissions {
+		if permission == nil {
+			continue
+		}
 		err := permission(r)
 		if err != nil {
 			return err

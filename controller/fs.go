@@ -6,6 +6,7 @@ import (
 	"api_core/model"
 	"api_core/permissions"
 	"api_core/request"
+	"api_core/route"
 	"api_core/utils"
 	"encoding/base64"
 	"fmt"
@@ -300,24 +301,24 @@ type FileSystemOptions struct {
 	SubFolder bool
 }
 
-func FileSystem(apiPath string, filePath func(*http.Request) string, fsPermissions FileSystemPermissions, options FileSystemOptions) []interfaces.Route {
-	routes := []interfaces.Route{}
-	routes = append(routes, NewRoute(http.MethodGet, apiPath, Folder(filePath), permissions.Merge(fsPermissions.Get, fsPermissions.Conditions)))
-	routes = append(routes, NewRoute(http.MethodPost, apiPath, PostFile(filePath), permissions.Merge(fsPermissions.Post, fsPermissions.Conditions)))
+func FileSystem(apiPath string, filePath func(*http.Request) string, fsPermissions FileSystemPermissions, options FileSystemOptions) []route.Route {
+	routes := []route.Route{}
+	routes = append(routes, route.Route{Method: http.MethodGet, Pattern: apiPath, Handler: Folder(filePath), Permissions: permissions.Merge(fsPermissions.Get, fsPermissions.Conditions)})
+	routes = append(routes, route.Route{Method: http.MethodPost, Pattern: apiPath, Handler: PostFile(filePath), Permissions: permissions.Merge(fsPermissions.Post, fsPermissions.Conditions)})
 	if options.SubFolder {
-		routes = append(routes, NewRoute(http.MethodGet, apiPath+"/{name}", GetFileOrFolder(filePath, func(r *http.Request) string { return chi.URLParam(r, "name") }), permissions.Merge(fsPermissions.GetFile, fsPermissions.Conditions)))
+		routes = append(routes, route.Route{Method: http.MethodGet, Pattern: apiPath + "/{name}", Handler: GetFileOrFolder(filePath, func(r *http.Request) string { return chi.URLParam(r, "name") }), Permissions: permissions.Merge(fsPermissions.GetFile, fsPermissions.Conditions)})
 	} else {
-		routes = append(routes, NewRoute(http.MethodGet, apiPath+"/{name}", GetFile(filePath, func(r *http.Request) string { return chi.URLParam(r, "name") }), permissions.Merge(fsPermissions.GetFile, fsPermissions.Conditions)))
+		routes = append(routes, route.Route{Method: http.MethodGet, Pattern: apiPath + "/{name}", Handler: GetFile(filePath, func(r *http.Request) string { return chi.URLParam(r, "name") }), Permissions: permissions.Merge(fsPermissions.GetFile, fsPermissions.Conditions)})
 	}
-	routes = append(routes, NewRoute(http.MethodDelete, apiPath+"/{name}", DeleteFile(filePath, func(r *http.Request) string { return chi.URLParam(r, "name") }), permissions.Merge(fsPermissions.Delete, fsPermissions.Conditions)))
+	routes = append(routes, route.Route{Method: http.MethodDelete, Pattern: apiPath + "/{name}", Handler: DeleteFile(filePath, func(r *http.Request) string { return chi.URLParam(r, "name") }), Permissions: permissions.Merge(fsPermissions.Delete, fsPermissions.Conditions)})
 
 	if options.SubFolder {
 		filePathFolder := func(r *http.Request) string {
 			return path.Join(filePath(r), chi.URLParam(r, "name"))
 		}
-		routes = append(routes, NewRoute(http.MethodPost, apiPath+"/{name}", PostFile(filePathFolder), permissions.Merge(fsPermissions.Post, fsPermissions.Conditions)))
-		routes = append(routes, NewRoute(http.MethodGet, apiPath+"/{name}/{fileName}", GetFile(filePathFolder, func(r *http.Request) string { return chi.URLParam(r, "fileName") }), permissions.Merge(fsPermissions.GetFile, fsPermissions.Conditions)))
-		routes = append(routes, NewRoute(http.MethodDelete, apiPath+"/{name}/{fileName}", DeleteFile(filePathFolder, func(r *http.Request) string { return chi.URLParam(r, "fileName") }), permissions.Merge(fsPermissions.Delete, fsPermissions.Conditions)))
+		routes = append(routes, route.Route{Method: http.MethodPost, Pattern: apiPath + "/{name}", Handler: PostFile(filePathFolder), Permissions: permissions.Merge(fsPermissions.Post, fsPermissions.Conditions)})
+		routes = append(routes, route.Route{Method: http.MethodGet, Pattern: apiPath + "/{name}/{fileName}", Handler: GetFile(filePathFolder, func(r *http.Request) string { return chi.URLParam(r, "fileName") }), Permissions: permissions.Merge(fsPermissions.GetFile, fsPermissions.Conditions)})
+		routes = append(routes, route.Route{Method: http.MethodDelete, Pattern: apiPath + "/{name}/{fileName}", Handler: DeleteFile(filePathFolder, func(r *http.Request) string { return chi.URLParam(r, "fileName") }), Permissions: permissions.Merge(fsPermissions.Delete, fsPermissions.Conditions)})
 	}
 	return routes
 }
