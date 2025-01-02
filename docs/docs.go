@@ -2,7 +2,6 @@ package docs
 
 import (
 	"embed"
-	"fmt"
 	"io"
 	"net/http"
 	"path"
@@ -337,10 +336,6 @@ func GetDocs(r *http.Request, options DocsOptions) OpenAPIV3 {
 
 func DocsHandler(options DocsOptions) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println(r.RequestURI)
-		if r.RequestURI == "/docs" || r.RequestURI == "/docs/" {
-			http.Redirect(w, r, "/docs/index.html", http.StatusMovedPermanently)
-		}
 		url := "public" + r.RequestURI
 		var contentType string
 
