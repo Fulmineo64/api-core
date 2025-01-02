@@ -1,10 +1,10 @@
 package controller
 
 import (
+	"api_core/interfaces"
 	"api_core/message"
 	"api_core/model"
 	"api_core/permissions"
-	"api_core/registry"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -311,8 +311,8 @@ func GetMapKeys(mapToFlatten map[string]interface{}) []string {
 	return keys
 }
 
-func NewRoute(method, pattern string, handler http.HandlerFunc, permissions ...permissions.HandlerFunc) registry.Route {
-	return registry.Route{
+func NewRoute(method, pattern string, handler http.HandlerFunc, permissions permissions.HandlerFunc) interfaces.Route {
+	return interfaces.Route{
 		Method:      method,
 		Pattern:     pattern,
 		Handler:     handler,

@@ -253,7 +253,7 @@ func GetRelationInfo(r *http.Request, rel *schema.Relationship, relations [][]st
 		typ = typ.Elem()
 	}
 
-	ctrl := registry.FindControllerByModel(typ)
+	ctrl := registry.ControllerByModel[typ.String()]
 	if ctrl != nil {
 		relationInfo.Endpoint = ctrl.BasePath()
 	}

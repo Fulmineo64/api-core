@@ -2,6 +2,7 @@ package docs
 
 import (
 	"embed"
+	"fmt"
 	"io"
 	"net/http"
 	"path"
@@ -259,7 +260,7 @@ func GetDocs(r *http.Request, options DocsOptions) OpenAPIV3 {
 
 	for _, controller := range registry.ControllerByName {
 		for _, route := range controller.Routes() {
-			if len(route.Permissions) > 0 && /*(!hasSession ||*/ route.Validate(r) != nil /*)*/ {
+			if /*(!hasSession ||*/ route.Authenticate(r) != nil /*)*/ {
 				continue
 			}
 
@@ -336,8 +337,9 @@ func GetDocs(r *http.Request, options DocsOptions) OpenAPIV3 {
 
 func DocsHandler(options DocsOptions) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.RequestURI == "/docs" {
-			http.Redirect(w, r, "docs/index.html", http.StatusMovedPermanently)
+		fmt.Println(r.RequestURI)
+		if r.RequestURI == "/docs" || r.RequestURI == "/docs/" {
+			http.Redirect(w, r, "/docs/index.html", http.StatusMovedPermanently)
 		}
 		url := "public" + r.RequestURI
 		var contentType string

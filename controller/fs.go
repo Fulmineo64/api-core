@@ -1,10 +1,10 @@
 package controller
 
 import (
+	"api_core/interfaces"
 	"api_core/message"
 	"api_core/model"
 	"api_core/permissions"
-	"api_core/registry"
 	"api_core/request"
 	"api_core/utils"
 	"encoding/base64"
@@ -300,8 +300,8 @@ type FileSystemOptions struct {
 	SubFolder bool
 }
 
-func FileSystem(apiPath string, filePath func(*http.Request) string, fsPermissions FileSystemPermissions, options FileSystemOptions) []registry.Route {
-	routes := []registry.Route{}
+func FileSystem(apiPath string, filePath func(*http.Request) string, fsPermissions FileSystemPermissions, options FileSystemOptions) []interfaces.Route {
+	routes := []interfaces.Route{}
 	routes = append(routes, NewRoute(http.MethodGet, apiPath, Folder(filePath), permissions.Merge(fsPermissions.Get, fsPermissions.Conditions)))
 	routes = append(routes, NewRoute(http.MethodPost, apiPath, PostFile(filePath), permissions.Merge(fsPermissions.Post, fsPermissions.Conditions)))
 	if options.SubFolder {
@@ -322,7 +322,7 @@ func FileSystem(apiPath string, filePath func(*http.Request) string, fsPermissio
 	return routes
 }
 
-func DefaultFileSystemPermissions(ctrl registry.Modeler[any]) FileSystemPermissions {
+func DefaultFileSystemPermissions(ctrl interfaces.Modeler[any]) FileSystemPermissions {
 	mdl := ctrl.Model()
 	fsPermissions := FileSystemPermissions{
 		Get:     permissions.Get(mdl),

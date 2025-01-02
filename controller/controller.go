@@ -2,10 +2,10 @@ package controller
 
 import (
 	"api_core/app"
+	"api_core/interfaces"
 	"api_core/message"
 	"api_core/permissions"
 	"api_core/query"
-	"api_core/registry"
 	"api_core/request"
 	"api_core/utils"
 	"io"
@@ -47,8 +47,8 @@ func (c Controller) FullPath(controller any) string {
 	return c.BasePath() + "/" + c.Endpoint(controller)
 }
 
-func (c Controller) Routes() []registry.Route {
-	return []registry.Route{}
+func (c Controller) Routes() []interfaces.Route {
+	return []interfaces.Route{}
 }
 
 // # Typed controller #
@@ -303,8 +303,8 @@ func pathParamsToModels(r *http.Request, modelType reflect.Type, fields []string
 	return nil
 }
 
-func (c TypedController[T]) Routes() []registry.Route {
-	routes := []registry.Route{}
+func (c TypedController[T]) Routes() []interfaces.Route {
+	routes := []interfaces.Route{}
 	var mdl any = *c.Model()
 	modelType := c.ModelType()
 	if modelType != nil {
@@ -328,30 +328,30 @@ func PrimaryFieldsToURL(primaryFields []string) string {
 	return params
 }
 
-func ModelRoutesGet(c registry.RestControllerGet, mdl any, urlPrimaryFields string) []registry.Route {
-	routes := []registry.Route{}
+func ModelRoutesGet(c interfaces.RestControllerGet, mdl any, urlPrimaryFields string) []interfaces.Route {
+	routes := []interfaces.Route{}
 	if m, ok := mdl.(permissions.ModelWithPermissionsGet); ok {
-		permissions := []permissions.HandlerFunc{m.PermissionsGet}
-		routes = append(routes, registry.Route{
+		permissions := m.PermissionsGet
+		routes = append(routes, interfaces.Route{
 			Method:      http.MethodGet,
 			Pattern:     "/",
 			Permissions: permissions,
 			Handler:     c.Get,
 		})
 		if len(urlPrimaryFields) > 0 {
-			routes = append(routes, registry.Route{
+			routes = append(routes, interfaces.Route{
 				Method:      http.MethodGet,
 				Pattern:     "/" + urlPrimaryFields,
 				Permissions: permissions,
 				Handler:     c.GetOne,
 			})
 		}
-		routes = append(routes, registry.Route{
+		routes = append(routes, interfaces.Route{
 			Method:      http.MethodGet,
 			Pattern:     "/structure",
 			Permissions: permissions,
 			Handler:     c.GetStructure,
-		}, registry.Route{
+		}, interfaces.Route{
 			Method:      http.MethodGet,
 			Pattern:     "/structure/{rel}",
 			Permissions: permissions,
@@ -361,11 +361,11 @@ func ModelRoutesGet(c registry.RestControllerGet, mdl any, urlPrimaryFields stri
 	return routes
 }
 
-func ModelRoutesPost(c registry.RestControllerPost, mdl any, urlPrimaryFields string) []registry.Route {
-	routes := []registry.Route{}
+func ModelRoutesPost(c interfaces.RestControllerPost, mdl any, urlPrimaryFields string) []interfaces.Route {
+	routes := []interfaces.Route{}
 	if m, ok := mdl.(permissions.ModelWithPermissionsPost); ok {
-		permissions := []permissions.HandlerFunc{m.PermissionsPost}
-		routes = append(routes, registry.Route{
+		permissions := m.PermissionsPost
+		routes = append(routes, interfaces.Route{
 			Method:      http.MethodPost,
 			Pattern:     "/",
 			Permissions: permissions,
@@ -375,17 +375,17 @@ func ModelRoutesPost(c registry.RestControllerPost, mdl any, urlPrimaryFields st
 	return routes
 }
 
-func ModelRoutesPatch(c registry.RestControllerPatch, mdl any, urlPrimaryFields string) []registry.Route {
-	routes := []registry.Route{}
+func ModelRoutesPatch(c interfaces.RestControllerPatch, mdl any, urlPrimaryFields string) []interfaces.Route {
+	routes := []interfaces.Route{}
 	if m, ok := mdl.(permissions.ModelWithPermissionsPatch); ok {
-		permissions := []permissions.HandlerFunc{m.PermissionsPatch}
-		routes = append(routes, registry.Route{
+		permissions := m.PermissionsPatch
+		routes = append(routes, interfaces.Route{
 			Method:      http.MethodPatch,
 			Pattern:     "/",
 			Permissions: permissions,
 			Handler:     c.Patch,
 		})
-		routes = append(routes, registry.Route{
+		routes = append(routes, interfaces.Route{
 			Method:      http.MethodPatch,
 			Pattern:     "/" + urlPrimaryFields,
 			Permissions: permissions,
@@ -395,11 +395,11 @@ func ModelRoutesPatch(c registry.RestControllerPatch, mdl any, urlPrimaryFields 
 	return routes
 }
 
-func ModelRoutesDelete(c registry.RestControllerDelete, mdl any, urlPrimaryFields string) []registry.Route {
-	routes := []registry.Route{}
+func ModelRoutesDelete(c interfaces.RestControllerDelete, mdl any, urlPrimaryFields string) []interfaces.Route {
+	routes := []interfaces.Route{}
 	if m, ok := mdl.(permissions.ModelWithPermissionsDelete); ok {
-		permissions := []permissions.HandlerFunc{m.PermissionsDelete}
-		routes = append(routes, registry.Route{
+		permissions := m.PermissionsDelete
+		routes = append(routes, interfaces.Route{
 			Method:      http.MethodDelete,
 			Pattern:     "/" + urlPrimaryFields,
 			Permissions: permissions,

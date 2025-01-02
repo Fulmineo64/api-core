@@ -1,4 +1,4 @@
-package registry
+package interfaces
 
 import (
 	"api_core/permissions"
@@ -15,12 +15,14 @@ type Endpointer interface {
 type Route struct {
 	Method      string
 	Pattern     string
+	Public      bool
 	Handler     http.HandlerFunc
-	Permissions []permissions.HandlerFunc
+	Permissions permissions.HandlerFunc
 }
 
-func (rt Route) Validate(r *http.Request) error {
-	return permissions.Validate(r, rt.Permissions...)
+func (rt Route) Authenticate(r *http.Request) error {
+	// TODO: Apply authentication here
+	return permissions.Validate(r, rt.Permissions)
 }
 
 type Router interface {
