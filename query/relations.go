@@ -18,7 +18,7 @@ import (
 const queryTableName = "ORIGIN"
 
 type ComputedField struct {
-	Fn func(*http.Request, *gorm.DB, *ModelInfo, *map[string]any) message.Message
+	Fn func(*http.Request, *gorm.DB, *ModelInfo, *map[string]any) error
 }
 
 type NestedModel struct {

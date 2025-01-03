@@ -271,9 +271,9 @@ func QueryRecursive(r *http.Request, db *gorm.DB, args *QueryArgs, config QueryC
 	for _, computedField := range info.ComputedFields {
 		for i := range *result {
 			item := (*result)[i]
-			msg := computedField.Fn(r, db, info, &item)
-			if msg != nil {
-				return msg
+			err := computedField.Fn(r, db, info, &item)
+			if err != nil {
+				return err
 			}
 		}
 	}

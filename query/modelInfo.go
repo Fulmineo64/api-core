@@ -181,7 +181,7 @@ func GetModelInfo(r *http.Request, modelSchema *schema.Schema, selects string, m
 					fn := mdl.MethodByName(funcName)
 					if fn.IsValid() {
 						info.ComputedFields = append(info.ComputedFields, ComputedField{
-							Fn: fn.Interface().(func(*http.Request, *gorm.DB, *ModelInfo, *map[string]any) message.Message),
+							Fn: fn.Interface().(func(*http.Request, *gorm.DB, *ModelInfo, *map[string]any) error),
 						})
 					} else {
 						return message.InvalidField(r, field.Name)
