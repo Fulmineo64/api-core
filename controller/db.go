@@ -13,6 +13,7 @@ import (
 	"api_core/model"
 	"api_core/permissions"
 	"api_core/request"
+	"api_core/response"
 	"api_core/utils"
 
 	"github.com/go-chi/render"
@@ -66,7 +67,7 @@ func CreateToDb(w http.ResponseWriter, r *http.Request, db *gorm.DB, model inter
 	}
 
 	if len(args) == 0 {
-		render.JSON(w, r, model)
+		response.JSON(w, r, model)
 	}
 	return nil
 }
@@ -108,7 +109,7 @@ func UpdateToDb(w http.ResponseWriter, r *http.Request, model interface{}, value
 	} else {
 		tx.Commit()
 	}
-	render.JSON(w, r, model)
+	response.JSON(w, r, model)
 	return nil
 }
 

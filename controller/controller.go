@@ -7,6 +7,7 @@ import (
 	"api_core/permissions"
 	"api_core/query"
 	"api_core/request"
+	"api_core/response"
 	"api_core/route"
 	"api_core/utils"
 	"io"
@@ -16,7 +17,6 @@ import (
 	"sync"
 
 	"github.com/go-chi/chi"
-	"github.com/go-chi/render"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
@@ -119,7 +119,7 @@ func (c TypedController[T]) GetStructure(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	render.JSON(w, r, GetStructInfo(r, modelSchema, splittedRelations))
+	response.JSON(w, r, GetStructInfo(r, modelSchema, splittedRelations))
 }
 
 func (c TypedController[T]) GetRelStructure(w http.ResponseWriter, r *http.Request) {
@@ -144,7 +144,7 @@ func (c TypedController[T]) GetRelStructure(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	render.JSON(w, r, GetStructInfo(r, relSchema, [][]string{}))
+	response.JSON(w, r, GetStructInfo(r, relSchema, [][]string{}))
 }
 
 func (c TypedController[T]) Post(w http.ResponseWriter, r *http.Request) {
@@ -272,7 +272,7 @@ func (c TypedController[T]) Patch(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	render.JSON(w, r, modelSlice)
+	response.JSON(w, r, modelSlice)
 }
 
 func (c TypedController[T]) Delete(w http.ResponseWriter, r *http.Request) {

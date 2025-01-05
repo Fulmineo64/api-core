@@ -9,9 +9,8 @@ import (
 	"strings"
 
 	"api_core/registry"
+	"api_core/response"
 	"api_core/utils"
-
-	"github.com/go-chi/render"
 )
 
 //go:embed public/*
@@ -349,7 +348,7 @@ func DocsHandler(options DocsOptions) http.HandlerFunc {
 		}
 
 		if strings.HasSuffix(url, "/docs.json") {
-			render.JSON(w, r, GetDocs(r, options))
+			response.JSON(w, r, GetDocs(r, options))
 		} else {
 			f, err := DocsFs.Open(url)
 			if err != nil {

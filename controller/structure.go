@@ -14,9 +14,9 @@ import (
 	"api_core/permissions"
 	"api_core/query"
 	"api_core/registry"
+	"api_core/response"
 	"api_core/utils"
 
-	"github.com/go-chi/render"
 	"gorm.io/gorm/schema"
 )
 
@@ -69,7 +69,7 @@ func GetStructure(mdl any) http.HandlerFunc {
 			return
 		}
 
-		render.JSON(w, r, GetStructInfo(r, modelSchema, splittedRelations))
+		response.JSON(w, r, GetStructInfo(r, modelSchema, splittedRelations))
 	}
 }
 
@@ -96,7 +96,7 @@ func GetRelStructure(mdl any) http.HandlerFunc {
 			}
 		}
 
-		render.JSON(w, r, GetStructInfo(r, relSchema, [][]string{}))
+		response.JSON(w, r, GetStructInfo(r, relSchema, [][]string{}))
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"api_core/app/dialectors"
 	"api_core/datatypes"
 	"api_core/query"
+	"api_core/response"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
@@ -174,9 +175,9 @@ func WriteQueryMapResult(w http.ResponseWriter, r *http.Request, args *query.Que
 			// TODO: It might be advisable to set Count to 1 in this situation
 		}
 		if len(r.URL.Query().Get("wrap")) > 0 {
-			render.JSON(w, r, Response{Data: result, Next: link, Count: args.Count})
+			response.JSON(w, r, Response{Data: result, Next: link, Count: args.Count})
 		} else {
-			render.JSON(w, r, result)
+			response.JSON(w, r, result)
 		}
 	}
 	return nil
@@ -271,9 +272,9 @@ func WriteDataWithCount(w http.ResponseWriter, r *http.Request, pagStart, pagEnd
 		}
 	default:
 		if len(r.URL.Query().Get("wrap")) > 0 {
-			render.JSON(w, r, Response{Data: data, Next: link, Count: count})
+			response.JSON(w, r, Response{Data: data, Next: link, Count: count})
 		} else {
-			render.JSON(w, r, data)
+			response.JSON(w, r, data)
 		}
 	}
 	return nil

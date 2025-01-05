@@ -223,7 +223,7 @@ func GetModelInfo(r *http.Request, modelSchema *schema.Schema, selects string, m
 					}
 					structField := field.StructField
 					if len(fieldAlias) > 0 {
-						regex := regexp.MustCompile(`^` + config.Dialector.AliasRegex() + `+$`)
+						regex := regexp.MustCompile(`^[\w*]+$`)
 						if !regex.MatchString(fieldAlias) {
 							return message.InvalidFieldAlias(r, fieldAlias, fieldName)
 						}

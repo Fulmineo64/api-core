@@ -6,6 +6,7 @@ import (
 	"api_core/model"
 	"api_core/permissions"
 	"api_core/request"
+	"api_core/response"
 	"api_core/route"
 	"api_core/utils"
 	"encoding/base64"
@@ -24,7 +25,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-chi/chi"
-	"github.com/go-chi/render"
 	"gorm.io/gorm"
 )
 
@@ -89,9 +89,9 @@ func Folder(pathFunc func(*http.Request) string) func(http.ResponseWriter, *http
 			log.Printf("Error walking the path %q: %v\n", basePath, err)
 		}
 		if detailed != "" {
-			render.JSON(w, r, gin.H{"files": filesDetailed})
+			response.JSON(w, r, gin.H{"files": filesDetailed})
 		} else {
-			render.JSON(w, r, gin.H{"files": files})
+			response.JSON(w, r, gin.H{"files": files})
 		}
 	}
 }
@@ -285,7 +285,7 @@ func GetAllFileInFolder(pathFunc func(*http.Request) string) func(http.ResponseW
 				arrayNames = append(arrayNames, filepath.Join(path, name))
 			}
 		}
-		render.JSON(w, r, arrayNames)
+		response.JSON(w, r, arrayNames)
 	}
 }
 

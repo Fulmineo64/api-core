@@ -1,6 +1,7 @@
 package message
 
 import (
+	"api_core/response"
 	"encoding/json"
 	"net/http"
 
@@ -56,7 +57,7 @@ func (m *Msg) Error() string {
 
 func (m *Msg) Write(w http.ResponseWriter, r *http.Request) {
 	render.Status(r, m.Status)
-	render.JSON(w, r, m.ToMap())
+	response.JSON(w, r, m.ToMap())
 }
 
 func (m *Msg) IsError() bool {
