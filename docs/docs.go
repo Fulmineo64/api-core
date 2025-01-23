@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"api_core/controller"
 	"api_core/registry"
 	"api_core/response"
 	"api_core/utils"
@@ -255,13 +256,13 @@ func GetDocs(r *http.Request, options DocsOptions) OpenAPIV3 {
 	/*hasSession := request.Session(r) != nil*/
 	pathParamsReg := regexp.MustCompile(`{(\w+)}`)
 
-	for _, controller := range registry.ControllerByName {
-		for _, route := range controller.Routes() {
+	for _, c := range registry.ControllerByName {
+		for _, route := range controller.Routes(c) {
 			if /*(!hasSession ||*/ route.Authenticate(r) != nil /*)*/ {
 				continue
 			}
 
-			routePath := path.Clean(controller.FullPath(controller) + "/" + route.Pattern)
+			routePath := path.Clean(controller.Endpoint(c) + "/" + route.Pattern)
 			paramsResults := pathParamsReg.FindAllStringSubmatch(routePath, -1)
 			routePath = pathParamsReg.ReplaceAllString(routePath, "{$1}")
 
@@ -270,7 +271,7 @@ func GetDocs(r *http.Request, options DocsOptions) OpenAPIV3 {
 				docs.Paths[routePath] = map[string]OpenAPIV3Route{}
 			}
 			currentRoute = docs.Paths[routePath]
-			mainTag := endpointToTag(controller.FullPath(controller))
+			mainTag := endpointToTag(controller.Endpoint(c))
 			newRoute := OpenAPIV3Route{
 				Tags:       []string{mainTag},
 				Parameters: []interface{}{},

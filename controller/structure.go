@@ -13,7 +13,6 @@ import (
 	"api_core/model"
 	"api_core/permissions"
 	"api_core/query"
-	"api_core/registry"
 	"api_core/response"
 	"api_core/utils"
 
@@ -243,7 +242,7 @@ func GetRelationInfo(r *http.Request, rel *schema.Relationship, relations [][]st
 		Label: FieldToString(rel.Field),
 	}
 
-	typ := rel.Field.StructField.Type
+	/*typ := rel.Field.StructField.Type
 
 	if typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
@@ -256,7 +255,7 @@ func GetRelationInfo(r *http.Request, rel *schema.Relationship, relations [][]st
 	ctrl := registry.ControllerByModel[typ.String()]
 	if ctrl != nil {
 		relationInfo.Endpoint = ctrl.BasePath()
-	}
+	}*/
 
 	for _, tag := range gormTags {
 		if strings.Contains(tag, "foreignKey:") {

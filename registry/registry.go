@@ -2,48 +2,42 @@ package registry
 
 import (
 	"api_core/interfaces"
+	"reflect"
+	"strings"
 )
 
-var ControllerByName = map[string]interfaces.BasicController{}
-var ControllerByModel = map[string]interfaces.BasicController{}
+var ControllerByName = map[string]any{}
+
+// var ControllerByModel = map[string]interfaces.BasicController{}
 var ModelByName = map[string]any{}
 
-func RegisterBasicController(name string, c interfaces.BasicController) {
-	if ControllerByName[name] != nil {
-		endpoint := c.Endpoint(c)
-		// TODO: Decide how to implement override levels
-		panic("Controller " + endpoint + " is already registered. To override it please specify an override level.")
+func Name(c any) string {
+	if n, ok := c.(interfaces.Namer); ok {
+		return n.Name()
 	}
-	ControllerByName[name] = c
+	name := reflect.TypeOf(c).String()
+	pieces := strings.Split(name, ".")
+	return pieces[len(pieces)-1]
 }
 
-func OverrideBasicController(name string, c interfaces.BasicController) {
-	ControllerByName[name] = c
-}
-
-func RegisterTypedController[T any](name string, c interfaces.TypedController[T]) {
-	RegisterBasicController(name, c)
-	modelType := c.ModelType()
-	if modelType != nil {
-		ControllerByModel[modelType.String()] = c
+func Models(models ...any) {
+	for _, model := range models {
+		ModelByName[Name(model)] = model
 	}
 }
 
-func OverrideTypedController[T any](name string, c interfaces.TypedController[T]) {
-	OverrideBasicController(name, c)
-	modelType := c.ModelType()
-	if modelType != nil {
-		ControllerByModel[modelType.String()] = c
+func Controllers(controllers ...any) {
+	for _, controller := range controllers {
+		ControllerByName[Name(controller)] = controller
+		/*if m, ok := controller.(interfaces.Modeler); ok {
+			ControllerByModel[Name(m.Model())] = controller
+		}*/
 	}
 }
 
-func RegisterModel(name string, m any) {
-	if ModelByName[name] != nil {
-		panic("Model " + name + " is already registered. To override it please specify an override level.")
+func ModelControllers(controllers ...interfaces.Modeler) {
+	for _, controller := range controllers {
+		Models(controller.Model())
+		Controllers(controller)
 	}
-	ModelByName[name] = m
-}
-
-func OverrideModel(name string, m any) {
-	ModelByName[name] = m
 }

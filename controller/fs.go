@@ -19,6 +19,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -323,7 +324,7 @@ func FileSystem(apiPath string, filePath func(*http.Request) string, fsPermissio
 	return routes
 }
 
-func DefaultFileSystemPermissions(ctrl interfaces.Modeler[any]) FileSystemPermissions {
+func DefaultFileSystemPermissions(ctrl interfaces.Modeler) FileSystemPermissions {
 	mdl := ctrl.Model()
 	fsPermissions := FileSystemPermissions{
 		Get:     permissions.Get(mdl),
@@ -331,17 +332,17 @@ func DefaultFileSystemPermissions(ctrl interfaces.Modeler[any]) FileSystemPermis
 		GetFile: permissions.Get(mdl),
 		Delete:  permissions.Delete(mdl),
 	}
-	if condMdl, ok := (*mdl).(model.ConditionsModel); ok {
+	if condMdl, ok := mdl.(model.ConditionsModel); ok {
 		fsPermissions.Conditions = func(r *http.Request) error {
 			db := request.DB(r)
 			primaries := map[string]interface{}{}
-			msg := GetPathParamsMsg(r, ctrl.Model(), utils.GetPrimaryFields(ctrl.ModelType()), &primaries)
+			msg := GetPathParamsMsg(r, mdl, utils.GetPrimaryFields(reflect.TypeOf(mdl)), &primaries)
 			if msg != nil {
 				return msg
 			}
 
 			tx := db.Model(mdl).Where(primaries)
-			table := (*mdl).(model.TableModel).TableName()
+			table := mdl.(model.TableModel).TableName()
 			query, args := condMdl.DefaultConditions(db, table)
 			if query != "" {
 				tx = tx.Where("("+query+")", args...)
