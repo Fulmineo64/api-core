@@ -1,22 +1,13 @@
 package controller
 
 type Controller struct {
-	/*basePath string*/
+	path string
 }
 
-/*func (c *Controller) SetBasePath(basePath string) *Controller {
-	c.basePath = basePath
-	return c
+func (c *Controller) SetPath(path string) {
+	c.path = path
 }
 
-func (c Controller) BasePath() string {
-	return c.basePath
+func (c *Controller) Path() string {
+	return c.path
 }
-
-func (c Controller) FullPath(controller any) string {
-	basePath := c.BasePath()
-	if basePath == "" {
-		return c.Endpoint(controller)
-	}
-	return basePath + "/" + c.Endpoint(controller)
-}*/

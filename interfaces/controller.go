@@ -20,6 +20,16 @@ type Modeler interface {
 	Model() any
 }
 
+type Pather interface {
+	SetPath(path string)
+	Path() string
+}
+
+type PatherModeler interface {
+	Pather
+	Modeler
+}
+
 type RouterModeler interface {
 	Router
 	Modeler
