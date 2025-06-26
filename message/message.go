@@ -1,12 +1,9 @@
 package message
 
 import (
-	"api_core/response"
 	"encoding/json"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-chi/render"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 )
@@ -15,7 +12,9 @@ type Message interface {
 	Text(string) Message
 	ToMap() map[string]interface{}
 	ToJSON() []byte
-	Write(w http.ResponseWriter, r *http.Request)
+	JSON(c *gin.Context)
+	Abort(c *gin.Context)
+	Write(c *gin.Context)
 	Error() string
 	IsError() bool
 	Is400() bool
@@ -51,13 +50,24 @@ func (m *Msg) ToJSON() []byte {
 	return val
 }
 
-func (m *Msg) Error() string {
-	return m.Message
+func (m *Msg) JSON(c *gin.Context) {
+	c.JSON(m.Status, m.ToMap())
 }
 
-func (m *Msg) Write(w http.ResponseWriter, r *http.Request) {
-	render.Status(r, m.Status)
-	response.JSON(w, r, m.ToMap())
+func (m *Msg) Abort(c *gin.Context) {
+	c.AbortWithStatusJSON(m.Status, m.ToMap())
+}
+
+func (m *Msg) Write(c *gin.Context) {
+	if m.IsError() {
+		m.Abort(c)
+	} else {
+		m.JSON(c)
+	}
+}
+
+func (m *Msg) Error() string {
+	return m.Message
 }
 
 func (m *Msg) IsError() bool {
@@ -94,11 +104,9 @@ func (m *Msg) Add(errors ...error) Message {
 	return m
 }
 
-func GetPrinter(r *http.Request) *message.Printer {
-	if r != nil {
-		ctx := r.Context()
-		ctxI18n := ctx.Value("i18n")
-		if ctxI18n != nil {
+func GetPrinter(c *gin.Context) *message.Printer {
+	if c != nil {
+		if ctxI18n, ok := c.Get("i18n"); ok {
 			if i18n, ok := ctxI18n.(*message.Printer); ok {
 				return i18n
 			}

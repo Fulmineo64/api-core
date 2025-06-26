@@ -1,35 +1,37 @@
 package interfaces
 
-import "net/http"
+import (
+	"github.com/gin-gonic/gin"
+)
 
 type GetHandler interface {
-	Get(w http.ResponseWriter, r *http.Request)
+	Get(c *gin.Context)
 }
 
 type GetOneHandler interface {
-	GetOne(w http.ResponseWriter, r *http.Request)
+	GetOne(c *gin.Context)
 }
 
 type GetStructureHandler interface {
-	GetStructure(w http.ResponseWriter, r *http.Request)
+	GetStructure(c *gin.Context)
 }
 
 type GetRelStructureHandler interface {
-	GetRelStructure(w http.ResponseWriter, r *http.Request)
+	GetRelStructure(c *gin.Context)
 }
 
 type PostHandler interface {
-	Post(w http.ResponseWriter, r *http.Request)
+	Post(c *gin.Context)
 }
 
 type PatchHandler interface {
-	Patch(w http.ResponseWriter, r *http.Request)
+	Patch(c *gin.Context)
 }
 
 type PatchOneHandler interface {
-	PatchOne(w http.ResponseWriter, r *http.Request)
+	PatchOne(c *gin.Context)
 }
 
 type DeleteHandler interface {
-	Delete(w http.ResponseWriter, r *http.Request)
+	Delete(c *gin.Context)
 }

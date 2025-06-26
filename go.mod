@@ -3,11 +3,11 @@ module api_core
 go 1.23.3
 
 require (
+	github.com/Datosystem/gofpdf v1.0.5
 	github.com/gin-gonic/gin v1.10.0
+	github.com/go-gormigrate/gormigrate/v2 v2.1.4
 	gorm.io/gorm v1.25.12
 )
-
-require github.com/ajg/form v1.5.1 // indirect
 
 require (
 	github.com/bytedance/sonic v1.11.6 // indirect
@@ -16,8 +16,6 @@ require (
 	github.com/cloudwego/iasm v0.2.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
-	github.com/go-chi/chi v1.5.5
-	github.com/go-chi/render v1.0.3
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.20.0
@@ -36,9 +34,9 @@ require (
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	golang.org/x/arch v0.8.0 // indirect
 	golang.org/x/crypto v0.23.0 // indirect
-	golang.org/x/net v0.25.0 // indirect
+	golang.org/x/net v0.25.0
 	golang.org/x/sys v0.20.0 // indirect
-	golang.org/x/text v0.15.0
+	golang.org/x/text v0.22.0
 	google.golang.org/protobuf v1.34.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

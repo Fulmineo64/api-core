@@ -1,8 +1,6 @@
 package interfaces
 
-import (
-	"api_core/route"
-)
+import "github.com/gin-gonic/gin"
 
 type Namer interface {
 	Name() string
@@ -13,7 +11,15 @@ type Endpointer interface {
 }
 
 type Router interface {
-	Routes(controller any) []route.Route
+	Routes() []Route
+}
+
+type Grouper interface {
+	Group() string
+}
+
+type Middlewarer interface {
+	Middleware() []gin.HandlerFunc
 }
 
 type Modeler interface {

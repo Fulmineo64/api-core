@@ -2,7 +2,6 @@ package query
 
 import (
 	"fmt"
-	"net/http"
 	"reflect"
 	"regexp"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"api_core/params"
 	"api_core/permissions"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"
@@ -48,7 +48,7 @@ type QueryConfig struct {
 	Dialector      dialectors.Dialector
 }
 
-func Query(r *http.Request, db *gorm.DB, args *QueryArgs, config QueryConfig) error {
+func Query(c *gin.Context, db *gorm.DB, args *QueryArgs, config QueryConfig) error {
 	if args.Sel != "" {
 		args.Sel = parseSel(args.Sel)
 	}
@@ -66,7 +66,7 @@ func Query(r *http.Request, db *gorm.DB, args *QueryArgs, config QueryConfig) er
 	// TODO: Extract and validate relations here
 
 	args.Info = ModelInfo{Select: []string{}, SelectArgs: []any{}, Relations: map[string]*params.Conditions{}, Nested: map[string]NestedModel{}, Schema: modelSchema}
-	msg := GetModelInfo(r, modelSchema, getSelect(args.Sel, args.Rel), &args.Info, args, config)
+	msg := GetModelInfo(c, modelSchema, getSelect(args.Sel, args.Rel), &args.Info, args, config)
 	if msg != nil {
 		return msg
 	}
@@ -80,15 +80,15 @@ func Query(r *http.Request, db *gorm.DB, args *QueryArgs, config QueryConfig) er
 	}
 
 	conds := params.Conditions{Nested: map[string]*params.Conditions{}}
-	err = params.ToStmt(r, args.Params, args.P, modelSchema, args.Info.Table, &conds, config.P)
+	err = params.ToStmt(c, args.Params, args.P, modelSchema, args.Info.Table, &conds, config.P)
 	if err != nil {
 		return err
 	}
 	if !config.SkipValidation {
-		if err := validateRelations(r, modelSchema, args.Info.Nested); err != nil {
+		if err := validateRelations(c, modelSchema, args.Info.Nested); err != nil {
 			return err
 		}
-		if err := validateRelations(r, modelSchema, conds.Nested); err != nil {
+		if err := validateRelations(c, modelSchema, conds.Nested); err != nil {
 			return err
 		}
 	}
@@ -107,7 +107,7 @@ func Query(r *http.Request, db *gorm.DB, args *QueryArgs, config QueryConfig) er
 	}
 
 	args.Result = []map[string]any{}
-	err = QueryRecursive(r, db, args, config, &args.Info, &conds, &args.Result)
+	err = QueryRecursive(c, db, args, config, &args.Info, &conds, &args.Result)
 	if err != nil {
 		return err
 	}
@@ -117,13 +117,13 @@ func Query(r *http.Request, db *gorm.DB, args *QueryArgs, config QueryConfig) er
 	}
 
 	if len(args.Primaries) != 0 && args.Count == 0 {
-		return message.ItemNotFound(r)
+		return message.ItemNotFound(c)
 	}
 
 	return nil
 }
 
-func QueryRecursive(r *http.Request, db *gorm.DB, args *QueryArgs, config QueryConfig, info *ModelInfo, conds *params.Conditions, result *[]map[string]any) error {
+func QueryRecursive(c *gin.Context, db *gorm.DB, args *QueryArgs, config QueryConfig, info *ModelInfo, conds *params.Conditions, result *[]map[string]any) error {
 	tx := db.Select(strings.Join(info.Select, ","), info.SelectArgs...)
 	tx.Statement.Distinct = info.Distinct
 	if info.Aggregate {
@@ -159,7 +159,7 @@ func QueryRecursive(r *http.Request, db *gorm.DB, args *QueryArgs, config QueryC
 		tx.Where(conds.Query, conds.Args...)
 	}
 
-	JoinRelations(r, tx, config, info, RelationsFromModelInfo(info, conds.Nested))
+	JoinRelations(c, tx, config, info, RelationsFromModelInfo(info, conds.Nested))
 
 	var pagination bool
 	if args == nil {
@@ -179,7 +179,7 @@ func QueryRecursive(r *http.Request, db *gorm.DB, args *QueryArgs, config QueryC
 			// }
 
 			if info.Aggregate && pagination {
-				return message.ConflictingPaginationAndAggregation(r)
+				return message.ConflictingPaginationAndAggregation(c)
 			}
 			if info.Distinct && args.Ord == "" {
 				order = ""
@@ -190,13 +190,13 @@ func QueryRecursive(r *http.Request, db *gorm.DB, args *QueryArgs, config QueryC
 				}
 				tx = tx.Order(order)
 			} else if pagination {
-				return message.ManualPagination(r)
+				return message.ManualPagination(c)
 			}
 		} else {
 			tx = tx.Where(args.Primaries)
 		}
 	}
-	if r.URL.Query().Get("SUM") == "1" {
+	if c.Query("SUM") == "1" {
 		n := clause.OrderBy{}.Name()
 		// ord := tx.Statement.Clauses[n]
 		delete(tx.Statement.Clauses, n)
@@ -271,7 +271,7 @@ func QueryRecursive(r *http.Request, db *gorm.DB, args *QueryArgs, config QueryC
 	for _, computedField := range info.ComputedFields {
 		for i := range *result {
 			item := (*result)[i]
-			err := computedField.Fn(r, db, info, &item)
+			err := computedField.Fn(c, db, info, &item)
 			if err != nil {
 				return err
 			}
@@ -331,7 +331,7 @@ func QueryRecursive(r *http.Request, db *gorm.DB, args *QueryArgs, config QueryC
 						}
 					} else {
 						// The field isn't defined in the map; return an error
-						return message.MissingForeignKey(r, ref.PrimaryKey.Name, relName)
+						return message.MissingForeignKey(c, ref.PrimaryKey.Name, relName)
 					}
 					keys[i] = key
 					if key != "" {
@@ -391,7 +391,7 @@ func QueryRecursive(r *http.Request, db *gorm.DB, args *QueryArgs, config QueryC
 			}
 			nestedConds.Query += keySetToStr(rel.ModelInfo.Table, rel.References, container.keySet)
 			rows := []map[string]any{}
-			err := QueryRecursive(r, db, nil, config, rel.ModelInfo, nestedConds, &rows)
+			err := QueryRecursive(c, db, nil, config, rel.ModelInfo, nestedConds, &rows)
 			if err != nil {
 				return err
 			}
@@ -441,7 +441,7 @@ func getSelect(sel, rel string) string {
 	return sel
 }
 
-func validateRelations[T params.NextNesterer[T]](r *http.Request, modelSchema *schema.Schema, relations map[string]T) message.Message {
+func validateRelations[T params.NextNesterer[T]](c *gin.Context, modelSchema *schema.Schema, relations map[string]T) message.Message {
 	for key, nested := range relations {
 		pieces := strings.Split(key, ".")
 		relSchema := modelSchema
@@ -449,18 +449,18 @@ func validateRelations[T params.NextNesterer[T]](r *http.Request, modelSchema *s
 			rel, ok := relSchema.Relationships.Relations[piece]
 			if ok {
 				relSchema = rel.FieldSchema
-				if msg := permissions.Get(reflect.New(rel.FieldSchema.ModelType).Interface())(r); msg != nil {
-					return message.UnauthorizedRelations(r, piece).Add(msg)
+				if msg := permissions.Get(reflect.New(rel.FieldSchema.ModelType).Interface())(c); msg != nil {
+					return message.UnauthorizedRelations(c, piece).Add(msg)
 				}
 			} else {
-				return message.InvalidRelation(r, piece)
+				return message.InvalidRelation(c, piece)
 			}
 		}
 		if nestedRels := nested.NextNested(); len(nestedRels) > 0 {
 			if _, ok := nestedRels[key]; ok && len(nestedRels) == 1 {
 				nestedRels = nestedRels[key].NextNested()
 			}
-			if msg := validateRelations(r, relSchema, nestedRels); msg != nil {
+			if msg := validateRelations(c, relSchema, nestedRels); msg != nil {
 				return msg
 			}
 		}

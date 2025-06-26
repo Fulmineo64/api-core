@@ -3,34 +3,35 @@ package request
 import (
 	"api_core/app"
 	"fmt"
-	"net/http"
 	"runtime/debug"
 	"strings"
+
+	"github.com/gin-gonic/gin"
 )
 
 var EnableRecover bool
 
-func AbortIfError(w http.ResponseWriter, r *http.Request, err error) bool {
+func AbortIfError(c *gin.Context, err error) bool {
 	if err != nil {
-		AbortWithError(w, r, err)
+		AbortWithError(c, err)
 	}
 	return err != nil
 }
 
-func AbortWithError(w http.ResponseWriter, r *http.Request, err error) {
-	app.Hooks.AbortWithError.Run(w, r, err)
+func AbortWithError(c *gin.Context, err error) {
+	app.Hooks.AbortWithError.Run(c, err)
 }
 
-func RecoverIfEnabled(w http.ResponseWriter, r *http.Request) {
+func RecoverIfEnabled(c *gin.Context) {
 	if EnableRecover {
-		Recover(w, r)
+		Recover(c)
 	}
 }
 
-func Recover(w http.ResponseWriter, r *http.Request) {
+func Recover(c *gin.Context) {
 	if err := recover(); err != nil {
 		stck := strings.Split(string(debug.Stack()), "\n")
 		errStr := fmt.Sprint(err) + "\n" + strings.Join(stck[3:], "\n")
-		app.Hooks.OnRecover.Run(w, r, errStr)
+		app.Hooks.OnRecover.Run(c, errStr)
 	}
 }

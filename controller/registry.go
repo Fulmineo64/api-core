@@ -1,4 +1,4 @@
-package registry
+package controller
 
 import (
 	"api_core/interfaces"
@@ -19,13 +19,13 @@ func Name(c any) string {
 	return pieces[len(pieces)-1]
 }
 
-func Models(models ...any) {
+func RegisterModels(models ...any) {
 	for _, model := range models {
 		ModelByName[Name(model)] = model
 	}
 }
 
-func Controllers(controllers ...interfaces.Pather) {
+func RegisterControllers(controllers ...interfaces.Pather) {
 	for _, controller := range controllers {
 		ControllerByName[Name(controller)] = controller
 		if m, ok := controller.(interfaces.Modeler); ok {
@@ -34,9 +34,9 @@ func Controllers(controllers ...interfaces.Pather) {
 	}
 }
 
-func ModelControllers(controllers ...interfaces.PatherModeler) {
+func RegisterModelControllers(controllers ...interfaces.PatherModeler) {
 	for _, controller := range controllers {
-		Models(controller.Model())
-		Controllers(controller)
+		RegisterModels(controller.Model())
+		RegisterControllers(controller)
 	}
 }

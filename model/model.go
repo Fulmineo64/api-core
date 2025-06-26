@@ -1,13 +1,13 @@
 package model
 
 import (
-	"net/http"
 	"sort"
 	"strings"
 
 	"api_core/message"
 	"api_core/params"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
@@ -41,7 +41,7 @@ type OrderedModel interface {
 }
 
 type ValidationModel interface {
-	Validate(*http.Request) message.Message
+	Validate(*gin.Context) message.Message
 }
 
 type TableModel interface {
@@ -66,7 +66,7 @@ type BaseModel struct {
 	DISPLAY_NAME string `gorm:"-" query:"" json:",omitempty" label:"Nome di visualizzazione"`
 }
 
-func (BaseModel) QueryDISPLAY_NAME(r *http.Request, model interface{}, modelSchema *schema.Schema, table string, nested bool, query *string, args *[]any, rels map[string]*params.Conditions) message.Message {
+func (BaseModel) QueryDISPLAY_NAME(c *gin.Context, model interface{}, modelSchema *schema.Schema, table string, nested bool, query *string, args *[]any, rels map[string]*params.Conditions) message.Message {
 	var sel []string
 	if m, ok := model.(DisplayNamePatternModel); ok {
 		pattern := m.DisplayNamePattern()
@@ -125,7 +125,7 @@ func (BaseModel) QueryDISPLAY_NAME(r *http.Request, model interface{}, modelSche
 		fields = append(fields, relFields...)
 
 		if len(fields) == 0 {
-			return message.DisplayNameNotSupported(r)
+			return message.DisplayNameNotSupported(c)
 		}
 
 		if len(fields) > 0 {

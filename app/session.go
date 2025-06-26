@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
-	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	"api_core/message"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -71,16 +71,16 @@ func (s *Session) HasOne(permissions ...string) bool {
 	return false
 }
 
-func (s *Session) Check(r *http.Request, permissions ...string) message.Message {
+func (s *Session) Check(c *gin.Context, permissions ...string) message.Message {
 	if !s.Has(permissions...) {
-		return message.InsufficientPermissions(r, permissions...)
+		return message.InsufficientPermissions(c, permissions...)
 	}
 	return nil
 }
 
-func (s *Session) CheckOne(r *http.Request, permissions ...string) message.Message {
+func (s *Session) CheckOne(c *gin.Context, permissions ...string) message.Message {
 	if !s.HasOne(permissions...) {
-		return message.InsufficientPermissionsHasOne(r, permissions...)
+		return message.InsufficientPermissionsHasOne(c, permissions...)
 	}
 	return nil
 }
@@ -119,8 +119,8 @@ func (sp *dbSessionProvider) clearExpired() {
 }
 
 // Functions
-func GetSession(r *http.Request) *Session {
-	return FindSession(strings.ReplaceAll(r.Header.Get("Authorization"), "Bearer ", ""))
+func GetSession(c *gin.Context) *Session {
+	return FindSession(strings.ReplaceAll(c.GetHeader("Authorization"), "Bearer ", ""))
 }
 
 func FindSession(key string) *Session {

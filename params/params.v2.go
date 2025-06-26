@@ -1,18 +1,18 @@
 package params
 
 import (
-	"net/http"
 	"reflect"
 	"regexp"
 	"strings"
 
 	"api_core/message"
 
+	"github.com/gin-gonic/gin"
 	"github.com/iancoleman/orderedmap"
 	"gorm.io/gorm/schema"
 )
 
-func parseParamsV2(r *http.Request, modelSchema *schema.Schema, alias string, params *orderedmap.OrderedMap, conds *Conditions, allowed map[string]struct{}) message.Message {
+func parseParamsV2(c *gin.Context, modelSchema *schema.Schema, alias string, params *orderedmap.OrderedMap, conds *Conditions, allowed map[string]struct{}) message.Message {
 	for _, key := range params.Keys() {
 		value, _ := params.Get(key)
 		logicOp := regexp.MustCompile(`^[|]+`).FindString(key)
@@ -24,7 +24,7 @@ func parseParamsV2(r *http.Request, modelSchema *schema.Schema, alias string, pa
 			}
 			dotIndex := strings.Index(key, ".")
 			if dotIndex == -1 {
-				return message.InvalidField(r, key)
+				return message.InvalidField(c, key)
 			}
 			remainder := logicOp + key[dotIndex+1:]
 			isNested := key[len(logicOp):][0] == '>'
@@ -50,11 +50,11 @@ func parseParamsV2(r *http.Request, modelSchema *schema.Schema, alias string, pa
 				} else {
 					conds.Nested[key] = &Conditions{Type: "N", Nested: map[string]*Conditions{}}
 				}
-				if err := parseParamsV2(r, rel.FieldSchema, "", nested, conds.Nested[key], allowed); err != nil {
+				if err := parseParamsV2(c, rel.FieldSchema, "", nested, conds.Nested[key], allowed); err != nil {
 					return err
 				}
 			} else {
-				if err := parseParamsV2(r, rel.FieldSchema, prefix+"."+key, nested, conds, allowed); err != nil {
+				if err := parseParamsV2(c, rel.FieldSchema, prefix+"."+key, nested, conds, allowed); err != nil {
 					return err
 				}
 			}
@@ -68,7 +68,7 @@ func parseParamsV2(r *http.Request, modelSchema *schema.Schema, alias string, pa
 				key = key[1:]
 				conds.Nested[key] = cond
 				if len(v.Keys()) > 0 {
-					if err := parseParamsV2(r, modelSchema, alias, &v, conds.Nested[key], allowed); err != nil {
+					if err := parseParamsV2(c, modelSchema, alias, &v, conds.Nested[key], allowed); err != nil {
 						return err
 					}
 				}
@@ -78,7 +78,7 @@ func parseParamsV2(r *http.Request, modelSchema *schema.Schema, alias string, pa
 					conds.Query += " NOT"
 				}
 				conds.Query += "(\n"
-				if err := parseParamsV2(r, modelSchema, alias, &v, conds, allowed); err != nil {
+				if err := parseParamsV2(c, modelSchema, alias, &v, conds, allowed); err != nil {
 					return err
 				}
 				conds.Query += "\n)"
@@ -91,7 +91,7 @@ func parseParamsV2(r *http.Request, modelSchema *schema.Schema, alias string, pa
 				if conds.Nested == nil {
 					conds.Nested = map[string]*Conditions{}
 				}
-				if err := addCondition(r, modelSchema, alias, condtionOp, field, value, conds, conds.Nested); err != nil {
+				if err := addCondition(c, modelSchema, alias, condtionOp, field, value, conds, conds.Nested); err != nil {
 					return err
 				}
 			}
@@ -110,12 +110,12 @@ func addLogicOperator(ops string, stmt *string) {
 	}
 }
 
-func addCondition(r *http.Request, modelSchema *schema.Schema, alias, ops string, key string, value interface{}, conds *Conditions, relations map[string]*Conditions) message.Message {
-	if field, args, typ := parseFieldV2(r, modelSchema, alias, key, relations); typ != nil {
+func addCondition(c *gin.Context, modelSchema *schema.Schema, alias, ops string, key string, value interface{}, conds *Conditions, relations map[string]*Conditions) message.Message {
+	if field, args, typ := parseFieldV2(c, modelSchema, alias, key, relations); typ != nil {
 		conds.Query += " " + field
 		conds.Args = append(conds.Args, args...)
 	} else {
-		return message.InvalidField(r, key)
+		return message.InvalidField(c, key)
 	}
 
 	var operator string
@@ -128,7 +128,7 @@ func addCondition(r *http.Request, modelSchema *schema.Schema, alias, ops string
 		if slice, ok := value.([]interface{}); ok {
 			conds.Args = append(conds.Args, slice[0], slice[1])
 		} else {
-			return message.InvalidParamType(r, key, "[]string")
+			return message.InvalidParamType(c, key, "[]string")
 		}
 	} else if value == "nil" || value == "null" || value == nil {
 		operator = " IS"
@@ -188,7 +188,7 @@ func addCondition(r *http.Request, modelSchema *schema.Schema, alias, ops string
 	return nil
 }
 
-func parseFieldV2(r *http.Request, modelSchema *schema.Schema, alias, key string, relations map[string]*Conditions) (string, []any, reflect.Type) {
+func parseFieldV2(c *gin.Context, modelSchema *schema.Schema, alias, key string, relations map[string]*Conditions) (string, []any, reflect.Type) {
 	var field *schema.Field
 	var table string
 	if strings.Contains(key, ".") {
@@ -233,7 +233,7 @@ func parseFieldV2(r *http.Request, modelSchema *schema.Schema, alias, key string
 			var sel string
 			args := []any{}
 			rels := map[string]*Conditions{}
-			msg := fn.Interface().(func(*http.Request, any, *schema.Schema, string, bool, *string, *[]any, map[string]*Conditions) message.Message)(r, mdl.Interface(), modelSchema, table, false, &sel, &args, rels)
+			msg := fn.Interface().(func(*gin.Context, any, *schema.Schema, string, bool, *string, *[]any, map[string]*Conditions) message.Message)(c, mdl.Interface(), modelSchema, table, false, &sel, &args, rels)
 			if msg != nil {
 				panic(msg)
 			}

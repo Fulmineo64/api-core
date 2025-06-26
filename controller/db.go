@@ -9,14 +9,14 @@ import (
 	"strings"
 	"sync"
 
+	"api_core/app/dialectors"
 	"api_core/message"
 	"api_core/model"
 	"api_core/permissions"
 	"api_core/request"
-	"api_core/response"
 	"api_core/utils"
 
-	"github.com/go-chi/render"
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
@@ -32,12 +32,12 @@ type MSSqlError interface {
 	SQLErrorState() uint8
 }
 
-func CreateToDb(w http.ResponseWriter, r *http.Request, db *gorm.DB, model interface{}, args ...string) error {
+func CreateToDb(c *gin.Context, db *gorm.DB, model interface{}, args ...string) error {
 	db = db.Session(&gorm.Session{CreateBatchSize: 25})
 
 	modelSchema, err := schema.Parse(model, &sync.Map{}, db.NamingStrategy)
 	if err != nil {
-		return message.InternalServerError(r)
+		message.InternalServerError(c)
 	}
 
 	modelsSlice := reflect.Indirect(reflect.ValueOf(model))
@@ -45,14 +45,14 @@ func CreateToDb(w http.ResponseWriter, r *http.Request, db *gorm.DB, model inter
 		checked := map[string]struct{}{}
 		l := modelsSlice.Len()
 		for i := 0; i < l; i++ {
-			msg := permissions.CheckModel(r, modelsSlice.Index(i), modelSchema, checked, false)
+			msg := permissions.CheckModel(c, modelsSlice.Index(i), modelSchema, checked, false)
 			if msg != nil {
 				return msg
 			}
 		}
 	} else {
 		checked := map[string]struct{}{}
-		msg := permissions.CheckModel(r, modelsSlice, modelSchema, checked, false)
+		msg := permissions.CheckModel(c, modelsSlice, modelSchema, checked, false)
 		if msg != nil {
 			return msg
 		}
@@ -61,23 +61,27 @@ func CreateToDb(w http.ResponseWriter, r *http.Request, db *gorm.DB, model inter
 	tx = tx.Create(model)
 	if tx.Error != nil {
 		tx.Rollback()
-		return message.Conflict(r).Text(tx.Error.Error())
+		dialector, err := dialectors.ByDB(db)
+		if err != nil {
+			return err
+		}
+		return dialector.ExposeSQLErr(tx.Error)
 	} else {
 		tx.Commit()
 	}
 
 	if len(args) == 0 {
-		response.JSON(w, r, model)
+		c.JSON(http.StatusOK, model)
 	}
 	return nil
 }
 
-func UpdateToDb(w http.ResponseWriter, r *http.Request, model interface{}, values any) error {
-	db := request.DB(r).Session(&gorm.Session{CreateBatchSize: 50})
+func UpdateToDb(c *gin.Context, model interface{}, values any) error {
+	db := request.DB(c).Session(&gorm.Session{CreateBatchSize: 50})
 
 	modelSchema, err := schema.Parse(model, &sync.Map{}, db.NamingStrategy)
 	if err != nil {
-		return message.InternalServerError(r)
+		return message.InternalServerError(c)
 	}
 
 	modelsSlice := reflect.Indirect(reflect.ValueOf(model))
@@ -85,7 +89,7 @@ func UpdateToDb(w http.ResponseWriter, r *http.Request, model interface{}, value
 		return errors.New("not supported")
 	} else {
 		checked := map[string]struct{}{}
-		msg := permissions.CheckModel(r, modelsSlice, modelSchema, checked, true)
+		msg := permissions.CheckModel(c, modelsSlice, modelSchema, checked, true)
 		if msg != nil {
 			return msg
 		}
@@ -93,7 +97,7 @@ func UpdateToDb(w http.ResponseWriter, r *http.Request, model interface{}, value
 
 	tx := db.Session(&gorm.Session{FullSaveAssociations: true, SkipDefaultTransaction: true}).Begin()
 	v := reflect.ValueOf(model)
-	err = DeleteRelations(r, tx, v, modelSchema)
+	err = DeleteRelations(c, tx, v, modelSchema)
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -109,21 +113,21 @@ func UpdateToDb(w http.ResponseWriter, r *http.Request, model interface{}, value
 	} else {
 		tx.Commit()
 	}
-	response.JSON(w, r, model)
+	c.JSON(http.StatusOK, model)
 	return nil
 }
 
-func DeleteFromDb(r *http.Request, models []any) error {
+func DeleteFromDb(c *gin.Context, models []any) error {
 	if len(models) == 0 {
 		return nil
 	}
 
-	db := request.DB(r)
+	db := request.DB(c)
 	tx := db.Begin()
 
 	modelSchema, err := schema.Parse(models[0], &sync.Map{}, db.NamingStrategy)
 	if err != nil {
-		return message.InternalServerError(r)
+		return message.InternalServerError(c)
 	}
 
 	for _, mdl := range models {
@@ -146,11 +150,11 @@ func DeleteFromDb(r *http.Request, models []any) error {
 
 	tx.Commit()
 
-	render.Status(r, http.StatusOK)
+	c.Status(http.StatusOK)
 	return nil
 }
 
-func DeleteRelations(r *http.Request, db *gorm.DB, modelVal reflect.Value, modelSchema *schema.Schema) error {
+func DeleteRelations(c *gin.Context, db *gorm.DB, modelVal reflect.Value, modelSchema *schema.Schema) error {
 	relSchema := modelSchema
 	relArr := relSchema.Relationships.HasOne
 	relArr = append(relArr, relSchema.Relationships.HasMany...)
@@ -198,7 +202,7 @@ func DeleteRelations(r *http.Request, db *gorm.DB, modelVal reflect.Value, model
 				} else {
 					relVal = relVal.Addr()
 				}
-				err := DeleteRelations(r, db, relVal, rel.FieldSchema)
+				err := DeleteRelations(c, db, relVal, rel.FieldSchema)
 				if err != nil {
 					return err
 				}
@@ -263,7 +267,7 @@ type Relation struct {
 /*
 CheckUnique performs a uniqueness check on a specific resource.
 */
-func CheckUnique(r *http.Request, db *gorm.DB, model interface{}, primary string, fields []string) message.Message {
+func CheckUnique(c *gin.Context, db *gorm.DB, model interface{}, primary string, fields []string) message.Message {
 	val := reflect.ValueOf(model)
 	var cond string
 	args := []interface{}{}
@@ -286,7 +290,7 @@ func CheckUnique(r *http.Request, db *gorm.DB, model interface{}, primary string
 		for i := 0; i < len(args); i++ {
 			str += fields[i] + " " + fmt.Sprint(reflect.Indirect(reflect.ValueOf(args[i])).Interface())
 		}
-		return message.DuplicateUnique(r, tx.Statement.Table, str)
+		return message.DuplicateUnique(c, tx.Statement.Table, str)
 	} else {
 		return nil
 	}
@@ -297,13 +301,13 @@ CheckRelations checks if the resource can be deleted.
 This method verifies whether the resource to be deleted has been used in any other user-provided relationships.
 If the resource is in use, it returns the controllers that use the resource; otherwise, it returns nothing in case of success.
 */
-func CheckRelations(r *http.Request, db *gorm.DB, id interface{}, relations ...Relation) message.Message {
+func CheckRelations(c *gin.Context, db *gorm.DB, id interface{}, relations ...Relation) message.Message {
 	errors := []string{}
 	for _, rel := range relations {
 		errors = append(errors, CheckRelatedModel(db, rel.Model, rel.Label, "", rel.ForeignKey+" = ?", id)...)
 	}
 	if len(errors) > 0 {
-		return message.DeleteFailed(r, errors)
+		return message.DeleteFailed(c, errors)
 	}
 	return nil
 }
@@ -359,9 +363,9 @@ func CheckQueryRelation(relName string, query *gorm.DB) []string {
 	return errors
 }
 
-func ErrorsToMsg(r *http.Request, errors []string) message.Message {
+func ErrorsToMsg(c *gin.Context, errors []string) message.Message {
 	if len(errors) > 0 {
-		return message.DeleteFailed(r, errors)
+		return message.DeleteFailed(c, errors)
 	}
 	return nil
 }
@@ -373,9 +377,8 @@ func DeleteModels(db *gorm.DB, models interface{}) (err error) {
 	for i := 0; i < l; i++ {
 		wg.Add(1)
 		go func(i int) {
-			w := db.Statement.Context.Value("w").(http.ResponseWriter)
-			r := db.Statement.Context.Value("r").(*http.Request)
-			defer request.RecoverIfEnabled(w, r)
+			c := request.Gin(db)
+			defer request.RecoverIfEnabled(c)
 			// TODO: LoadForeignKeys should be placed here
 			res := db.Delete(val.Index(i).Addr().Interface())
 			if res.Error != nil {

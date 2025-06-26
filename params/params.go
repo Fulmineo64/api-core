@@ -2,10 +2,10 @@ package params
 
 import (
 	"encoding/json"
-	"net/http"
 
 	"api_core/message"
 
+	"github.com/gin-gonic/gin"
 	"github.com/iancoleman/orderedmap"
 	"gorm.io/gorm/schema"
 )
@@ -26,20 +26,20 @@ func (c *Conditions) NextNested() map[string]*Conditions {
 	return c.Nested
 }
 
-func ToStmt(r *http.Request, params, p string, modelSchema *schema.Schema, alias string, conds *Conditions, allowed map[string]struct{}) message.Message {
+func ToStmt(c *gin.Context, params, p string, modelSchema *schema.Schema, alias string, conds *Conditions, allowed map[string]struct{}) message.Message {
 	if len(params) > 0 {
 		var paramsArr []interface{}
 		if json.Unmarshal([]byte(params), &paramsArr) != nil {
-			return message.InvalidParamsJSON(r)
+			return message.InvalidParamsJSON(c)
 		}
-		if msg := parseParams(r, modelSchema, alias, paramsArr, conds, allowed); msg != nil {
+		if msg := parseParams(c, modelSchema, alias, paramsArr, conds, allowed); msg != nil {
 			return msg
 		}
 	}
 	pMap := orderedmap.New()
 	if len(p) > 0 {
 		if json.Unmarshal([]byte(p), &pMap) != nil {
-			return message.InvalidParamsJSON(r)
+			return message.InvalidParamsJSON(c)
 		}
 	}
 	// TODO: Remove in the future if no longer necessary
@@ -53,7 +53,7 @@ func ToStmt(r *http.Request, params, p string, modelSchema *schema.Schema, alias
 	}*/
 
 	if len(pMap.Keys()) > 0 {
-		if msg := parseParamsV2(r, modelSchema, alias, pMap, conds, allowed); msg != nil {
+		if msg := parseParamsV2(c, modelSchema, alias, pMap, conds, allowed); msg != nil {
 			return msg
 		}
 	}

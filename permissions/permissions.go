@@ -3,7 +3,8 @@ package permissions
 import (
 	"api_core/request"
 	"api_core/utils"
-	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 var permissions = utils.NewKeySet()
@@ -26,12 +27,12 @@ func Clear() {
 	permissions.Clear()
 }
 
-func Validate(r *http.Request, permissions ...HandlerFunc) error {
+func Validate(c *gin.Context, permissions ...HandlerFunc) error {
 	for _, permission := range permissions {
 		if permission == nil {
 			continue
 		}
-		err := permission(r)
+		err := permission(c)
 		if err != nil {
 			return err
 		}
@@ -40,10 +41,10 @@ func Validate(r *http.Request, permissions ...HandlerFunc) error {
 }
 
 func Merge(permissionFunctions ...HandlerFunc) HandlerFunc {
-	return func(r *http.Request) error {
+	return func(c *gin.Context) error {
 		for _, permissionFunc := range permissionFunctions {
 			if permissionFunc != nil {
-				msg := permissionFunc(r)
+				msg := permissionFunc(c)
 				if msg != nil {
 					return msg
 				}
@@ -53,14 +54,11 @@ func Merge(permissionFunctions ...HandlerFunc) HandlerFunc {
 	}
 }
 
-func Middleware(permissionFuncs ...HandlerFunc) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			err := Validate(r, permissionFuncs...)
-			if request.AbortIfError(w, r, err) {
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
+func Middleware(permissionFuncs ...HandlerFunc) func(*gin.Context) {
+	return func(c *gin.Context) {
+		err := Validate(c, permissionFuncs...)
+		if request.AbortIfError(c, err) {
+			return
+		}
 	}
 }

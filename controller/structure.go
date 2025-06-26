@@ -13,10 +13,9 @@ import (
 	"api_core/model"
 	"api_core/permissions"
 	"api_core/query"
-	"api_core/registry"
-	"api_core/response"
 	"api_core/utils"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm/schema"
 )
 
@@ -55,9 +54,9 @@ type StructInfo struct {
 	UpdateConditions []model.UpdateConditions `json:"updateConditions"`
 }
 
-func GetStructure(mdl any) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		relations := query.GetRelations(r)
+func GetStructure(mdl any) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		relations := query.GetRelations(c)
 		splittedRelations := [][]string{}
 		for _, rel := range relations {
 			splittedRelations = append(splittedRelations, strings.Split(rel, "."))
@@ -65,42 +64,42 @@ func GetStructure(mdl any) http.HandlerFunc {
 
 		modelSchema, err := schema.Parse(mdl, &sync.Map{}, app.DB.NamingStrategy)
 		if err != nil {
-			message.InternalServerError(r).Write(w, r)
+			message.InternalServerError(c).Write(c)
 			return
 		}
 
-		response.JSON(w, r, GetStructInfo(r, modelSchema, splittedRelations))
+		c.JSON(http.StatusOK, GetStructInfo(c, modelSchema, splittedRelations))
 	}
 }
 
-func GetRelStructure(mdl any) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func GetRelStructure(mdl any) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		modelSchema, err := schema.Parse(mdl, &sync.Map{}, app.DB.NamingStrategy)
 		if err != nil {
-			message.InternalServerError(r).Write(w, r)
+			message.InternalServerError(c).Write(c)
 			return
 		}
 
-		pieces := strings.Split(r.URL.Query().Get("rel"), ".")
+		pieces := strings.Split(c.Query("rel"), ".")
 		relSchema := modelSchema
 		for i, piece := range pieces {
 			if rel, ok := relSchema.Relationships.Relations[piece]; ok {
 				relSchema = rel.FieldSchema
-				if msg := permissions.Get(reflect.New(relSchema.ModelType).Interface())(r); msg != nil {
-					message.UnauthorizedRelations(r, strings.Join(pieces[:i+1], ".")).Add(msg).Write(w, r)
+				if msg := permissions.Get(reflect.New(relSchema.ModelType).Interface())(c); msg != nil {
+					message.UnauthorizedRelations(c, strings.Join(pieces[:i+1], ".")).Add(msg).Write(c)
 					return
 				}
 			} else {
-				message.InvalidRelations(r, strings.Join(pieces[:i+1], ".")).Write(w, r)
+				message.InvalidRelations(c, strings.Join(pieces[:i+1], ".")).Write(c)
 				return
 			}
 		}
 
-		response.JSON(w, r, GetStructInfo(r, relSchema, [][]string{}))
+		c.JSON(http.StatusOK, GetStructInfo(c, relSchema, [][]string{}))
 	}
 }
 
-func GetStructInfo(r *http.Request, schem *schema.Schema, relations [][]string) StructInfo {
+func GetStructInfo(c *gin.Context, schem *schema.Schema, relations [][]string) StructInfo {
 	var checkFn = func(fns []func(*schema.Field) bool, sc *schema.Field) bool {
 		for _, fn := range fns {
 			if !fn(sc) {
@@ -117,12 +116,12 @@ func GetStructInfo(r *http.Request, schem *schema.Schema, relations [][]string) 
 				typ = typ.Elem()
 			}
 			mdl := reflect.New(typ).Interface()
-			msg := permissions.Get(mdl)(r)
+			msg := permissions.Get(mdl)(c)
 			return msg == nil
 		},
 	}
 
-	if r.URL.Query().Get("w") == "1" {
+	if c.Query("w") == "1" {
 		// Checks for only writable
 		fn := func(f *schema.Field) bool {
 			return f.Creatable && f.Updatable
@@ -130,7 +129,7 @@ func GetStructInfo(r *http.Request, schem *schema.Schema, relations [][]string) 
 		checkFieldFns = append(checkFieldFns, fn)
 		checkRelFns = append(checkRelFns, fn)
 	}
-	if r.URL.Query().Get("r") == "1" {
+	if c.Query("r") == "1" {
 		// Checks for only readable
 		fn := func(f *schema.Field) bool {
 			return f.Readable
@@ -147,10 +146,10 @@ func GetStructInfo(r *http.Request, schem *schema.Schema, relations [][]string) 
 
 	for _, field := range schem.Fields {
 		if field.DBName != "" && checkFn(checkFieldFns, field) {
-			structInfo.Fields = append(structInfo.Fields, GetFieldInfo(r, field))
+			structInfo.Fields = append(structInfo.Fields, GetFieldInfo(c, field))
 		}
 		if _, ok := field.Tag.Lookup("query"); ok {
-			fieldInfo := GetFieldInfo(r, field)
+			fieldInfo := GetFieldInfo(c, field)
 			fieldInfo.Query = true
 			structInfo.Fields = append(structInfo.Fields, fieldInfo)
 		}
@@ -158,7 +157,7 @@ func GetStructInfo(r *http.Request, schem *schema.Schema, relations [][]string) 
 
 	for key, rel := range schem.Relationships.Relations {
 		if !strings.HasPrefix(key, "_") && checkFn(checkRelFns, rel.Field) {
-			structInfo.Relations = append(structInfo.Relations, GetRelationInfo(r, rel, relations))
+			structInfo.Relations = append(structInfo.Relations, GetRelationInfo(c, rel, relations))
 		}
 	}
 
@@ -185,7 +184,7 @@ func GetStructInfo(r *http.Request, schem *schema.Schema, relations [][]string) 
 	return structInfo
 }
 
-func GetFieldInfo(r *http.Request, field *schema.Field) FieldInfo {
+func GetFieldInfo(c *gin.Context, field *schema.Field) FieldInfo {
 	requiredWithout := ""
 	requiredWith := ""
 	v := strings.Split(field.Tag.Get("valid"), ",")
@@ -236,7 +235,7 @@ func GetFieldInfo(r *http.Request, field *schema.Field) FieldInfo {
 	return fieldInfo
 }
 
-func GetRelationInfo(r *http.Request, rel *schema.Relationship, relations [][]string) RelationInfo {
+func GetRelationInfo(c *gin.Context, rel *schema.Relationship, relations [][]string) RelationInfo {
 	gormTags := strings.Split(rel.Field.Tag.Get("gorm"), ";")
 	relationInfo := RelationInfo{
 		Field: rel.Field.Name,
@@ -253,7 +252,7 @@ func GetRelationInfo(r *http.Request, rel *schema.Relationship, relations [][]st
 		typ = typ.Elem()
 	}
 
-	ctrl := registry.ControllerByModel[registry.Name(typ)]
+	ctrl := ControllerByModel[Name(typ)]
 	if ctrl != nil {
 		relationInfo.Endpoint = ctrl.Path() + Endpoint(ctrl)
 	}
@@ -282,7 +281,7 @@ func GetRelationInfo(r *http.Request, rel *schema.Relationship, relations [][]st
 		}
 	}
 	if len(rels) > 0 {
-		structInfo := GetStructInfo(r, rel.FieldSchema, rels)
+		structInfo := GetStructInfo(c, rel.FieldSchema, rels)
 		relationInfo.Struct = &structInfo
 	}
 

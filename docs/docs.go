@@ -9,9 +9,9 @@ import (
 	"strings"
 
 	"api_core/controller"
-	"api_core/registry"
-	"api_core/response"
 	"api_core/utils"
+
+	"github.com/gin-gonic/gin"
 )
 
 //go:embed public/*
@@ -103,7 +103,7 @@ type DocsOptions struct {
 	Servers     []OpenAPIV3Server
 }
 
-func GetDocs(r *http.Request, options DocsOptions) OpenAPIV3 {
+func GetDocs(c *gin.Context, options DocsOptions) OpenAPIV3 {
 	docs := OpenAPIV3{
 		Openapi: "3.1.0",
 		Info: OpenAPIV3Info{
@@ -256,13 +256,13 @@ func GetDocs(r *http.Request, options DocsOptions) OpenAPIV3 {
 	/*hasSession := request.Session(r) != nil*/
 	pathParamsReg := regexp.MustCompile(`{(\w+)}`)
 
-	for _, c := range registry.ControllerByName {
-		for _, route := range controller.Routes(c) {
-			if /*(!hasSession ||*/ route.Authenticate(r) != nil /*)*/ {
+	for _, ctrl := range controller.ControllerByName {
+		for _, route := range controller.Routes(ctrl) {
+			if /*(!hasSession ||*/ route.Authenticate(c) != nil /*)*/ {
 				continue
 			}
 
-			routePath := path.Clean(controller.Endpoint(c) + "/" + route.Pattern)
+			routePath := path.Clean(controller.Endpoint(ctrl) + "/" + route.Pattern)
 			paramsResults := pathParamsReg.FindAllStringSubmatch(routePath, -1)
 			routePath = pathParamsReg.ReplaceAllString(routePath, "{$1}")
 
@@ -271,7 +271,7 @@ func GetDocs(r *http.Request, options DocsOptions) OpenAPIV3 {
 				docs.Paths[routePath] = map[string]OpenAPIV3Route{}
 			}
 			currentRoute = docs.Paths[routePath]
-			mainTag := endpointToTag(controller.Endpoint(c))
+			mainTag := endpointToTag(controller.Endpoint(ctrl))
 			newRoute := OpenAPIV3Route{
 				Tags:       []string{mainTag},
 				Parameters: []interface{}{},
@@ -333,9 +333,9 @@ func GetDocs(r *http.Request, options DocsOptions) OpenAPIV3 {
 	return docs
 }
 
-func DocsHandler(options DocsOptions) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		url := "public" + r.RequestURI
+func DocsHandler(options DocsOptions) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		url := "public" + c.Request.RequestURI
 		var contentType string
 
 		if strings.HasSuffix(url, ".html") {
@@ -349,7 +349,7 @@ func DocsHandler(options DocsOptions) http.HandlerFunc {
 		}
 
 		if strings.HasSuffix(url, "/docs.json") {
-			response.JSON(w, r, GetDocs(r, options))
+			c.JSON(http.StatusOK, GetDocs(c, options))
 		} else {
 			f, err := DocsFs.Open(url)
 			if err != nil {
@@ -365,9 +365,7 @@ func DocsHandler(options DocsOptions) http.HandlerFunc {
 				return
 			}
 
-			w.Header().Set("Content-Type", contentType)
-			w.WriteHeader(http.StatusOK)
-			w.Write(data)
+			c.Data(http.StatusOK, contentType, data)
 		}
 	}
 }

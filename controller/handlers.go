@@ -4,7 +4,6 @@ import (
 	"api_core/app/dialectors"
 	"api_core/datatypes"
 	"api_core/query"
-	"api_core/response"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
@@ -15,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/render"
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
@@ -25,7 +24,7 @@ type Response struct {
 	Count int64
 }
 
-func HandleGet(w http.ResponseWriter, r *http.Request, db *gorm.DB, primaries map[string]interface{}, model any) error {
+func HandleGet(c *gin.Context, db *gorm.DB, primaries map[string]interface{}, model any) error {
 	if db == nil {
 		return errors.New("please provide a valid instance of *gorm.DB in the db param")
 	}
@@ -34,31 +33,31 @@ func HandleGet(w http.ResponseWriter, r *http.Request, db *gorm.DB, primaries ma
 		return err
 	}
 	args := query.QueryArgs{
-		Sel:       r.URL.Query().Get("sel"),
-		Rel:       r.URL.Query().Get("rel"),
-		Params:    r.URL.Query().Get("params"),
-		P:         r.URL.Query().Get("p"),
-		PagStart:  r.URL.Query().Get("pagStart"),
-		PagEnd:    r.URL.Query().Get("pagEnd"),
-		Ord:       r.URL.Query().Get("ord"),
+		Sel:       c.Query("sel"),
+		Rel:       c.Query("rel"),
+		Params:    c.Query("params"),
+		P:         c.Query("p"),
+		PagStart:  c.Query("pagStart"),
+		PagEnd:    c.Query("pagEnd"),
+		Ord:       c.Query("ord"),
 		Primaries: primaries,
 		Model:     model,
 	}
-	err = query.Query(r, db, &args, query.QueryConfig{
+	err = query.Query(c, db, &args, query.QueryConfig{
 		Dialector: dialector,
 	})
 	if err != nil {
 		return err
 	}
-	err = WriteQueryMapResult(w, r, &args)
+	err = WriteQueryMapResult(c, &args)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func WriteQueryMapResult(w http.ResponseWriter, r *http.Request, args *query.QueryArgs) error {
-	w.Header().Set("X-Total-Count", strconv.Itoa(int(args.Count)))
+func WriteQueryMapResult(c *gin.Context, args *query.QueryArgs) error {
+	c.Header("X-Total-Count", strconv.Itoa(int(args.Count)))
 	var link string
 	if query.ShouldPaginate(args.PagStart, args.PagEnd) {
 		limit := query.GetLimit(args.PagStart, args.PagEnd)
@@ -66,30 +65,31 @@ func WriteQueryMapResult(w http.ResponseWriter, r *http.Request, args *query.Que
 		end := start + limit
 		if int64(end) < args.Count {
 			var params []string
-			for key, values := range r.URL.Query() {
-				if key == "pagStart" {
+			for key, values := range c.Request.URL.Query() {
+				switch key {
+				case "pagStart":
 					params = append(params, key+"="+strconv.Itoa(start))
-				} else if key == "pagEnd" {
+				case "pagEnd":
 					params = append(params, key+"="+strconv.Itoa(end))
-				} else {
+				default:
 					params = append(params, key+"="+strings.Join(values, "&"+key+"="))
 				}
 			}
-			link = r.URL.RequestURI() + "?" + strings.Join(params, "&")
-			w.Header().Set("Link", link)
+			link = c.FullPath() + "?" + strings.Join(params, "&")
+			c.Header("Link", link)
 		}
 	}
-	switch r.Header.Get("Accept") {
+	switch c.GetHeader("Accept") {
 	case "application/csv", "text/csv":
-		w.Header().Set("Content-Type", r.Header.Get("Accept")+"; charset=utf-8")
-		w.Header().Set("Content-Disposition", "attachment; filename=data.csv")
-		render.Status(r, http.StatusOK)
+		c.Header("Content-Type", c.GetHeader("Accept")+"; charset=utf-8")
+		c.Header("Content-Disposition", "attachment; filename=data.csv")
+		c.Status(http.StatusOK)
 
 		// TODO: Done but needs better checking; sorting based on the input select
 		// TODO: Manage the CSV in the correct order
 
 		var csvData [][]string
-		tmz := r.Header.Get("Timezone")
+		tmz := c.GetHeader("Timezone")
 		var heading []string
 		for _, f := range args.Info.Fields {
 			heading = append(heading, f.Name)
@@ -123,7 +123,7 @@ func WriteQueryMapResult(w http.ResponseWriter, r *http.Request, args *query.Que
 							if date, ok := f.(datatypes.Date); ok {
 								row = append(row, time.Time(date).Format("02/01/2006"))
 							} else if datetime, ok := f.(datatypes.Datetime); ok {
-								if r.Header.Get("Only-Date") == "" {
+								if c.GetHeader("Only-Date") == "" {
 									loc, _ := time.LoadLocation(tmz)
 									row = append(row, time.Time(datetime).In(loc).Format("02/01/2006 15:04"))
 								} else {
@@ -159,14 +159,14 @@ func WriteQueryMapResult(w http.ResponseWriter, r *http.Request, args *query.Que
 				csvData = append(csvData, row)
 			}
 		}
-		if err := csv.NewWriter(w).WriteAll(csvData); err != nil {
+		if err := csv.NewWriter(c.Writer).WriteAll(csvData); err != nil {
 			return err
 		}
 	case "application/xml", "text/xml":
-		if reflect.TypeOf(args.Result).Name() == "" || len(r.URL.Query().Get("wrap")) > 0 {
-			render.XML(w, r, Response{Data: args.Result, Next: link, Count: args.Count})
+		if reflect.TypeOf(args.Result).Name() == "" || len(c.Query("wrap")) > 0 {
+			c.XML(http.StatusOK, Response{Data: args.Result, Next: link, Count: args.Count})
 		} else {
-			render.XML(w, r, args.Result)
+			c.XML(http.StatusOK, args.Result)
 		}
 	default:
 		var result any = args.Result
@@ -174,17 +174,17 @@ func WriteQueryMapResult(w http.ResponseWriter, r *http.Request, args *query.Que
 			result = args.Result[0]
 			// TODO: It might be advisable to set Count to 1 in this situation
 		}
-		if len(r.URL.Query().Get("wrap")) > 0 {
-			response.JSON(w, r, Response{Data: result, Next: link, Count: args.Count})
+		if len(c.Query("wrap")) > 0 {
+			c.JSON(http.StatusOK, Response{Data: result, Next: link, Count: args.Count})
 		} else {
-			response.JSON(w, r, result)
+			c.JSON(http.StatusOK, result)
 		}
 	}
 	return nil
 }
 
-func WriteDataWithCount(w http.ResponseWriter, r *http.Request, pagStart, pagEnd string, data any, count int64) error {
-	w.Header().Set("X-Total-Count", strconv.Itoa(int(count)))
+func WriteDataWithCount(c *gin.Context, pagStart, pagEnd string, data any, count int64) error {
+	c.Header("X-Total-Count", strconv.Itoa(int(count)))
 	var link string
 	if query.ShouldPaginate(pagStart, pagEnd) {
 		limit := query.GetLimit(pagStart, pagEnd)
@@ -192,24 +192,25 @@ func WriteDataWithCount(w http.ResponseWriter, r *http.Request, pagStart, pagEnd
 		end := start + limit
 		if int64(end) < count {
 			var params []string
-			for key, values := range r.URL.Query() {
-				if key == "pagStart" {
+			for key, values := range c.Request.URL.Query() {
+				switch key {
+				case "pagStart":
 					params = append(params, key+"="+strconv.Itoa(start))
-				} else if key == "pagEnd" {
+				case "pagEnd":
 					params = append(params, key+"="+strconv.Itoa(end))
-				} else {
+				default:
 					params = append(params, key+"="+strings.Join(values, "&"+key+"="))
 				}
 			}
-			link = r.URL.RequestURI() + "?" + strings.Join(params, "&")
-			w.Header().Set("Link", link)
+			link = c.FullPath() + "?" + strings.Join(params, "&")
+			c.Header("Link", link)
 		}
 	}
-	switch r.Header.Get("Accept") {
+	switch c.GetHeader("Accept") {
 	case "application/csv", "text/csv":
-		w.Header().Set("Content-Type", r.Header.Get("Accept")+"; charset=utf-8")
-		w.Header().Set("Content-Disposition", "attachment; filename=data.csv")
-		render.Status(r, http.StatusOK)
+		c.Header("Content-Type", c.GetHeader("Accept")+"; charset=utf-8")
+		c.Header("Content-Disposition", "attachment; filename=data.csv")
+		c.Status(http.StatusOK)
 
 		var csvData [][]string
 		v := reflect.ValueOf(data).Elem()
@@ -261,20 +262,20 @@ func WriteDataWithCount(w http.ResponseWriter, r *http.Request, pagStart, pagEnd
 				csvData = append(csvData, row)
 			}
 		}
-		if err := csv.NewWriter(w).WriteAll(csvData); err != nil {
+		if err := csv.NewWriter(c.Writer).WriteAll(csvData); err != nil {
 			return err
 		}
 	case "application/xml", "text/xml":
-		if reflect.TypeOf(data).Name() == "" || len(r.URL.Query().Get("wrap")) > 0 {
-			render.XML(w, r, Response{Data: data, Next: link, Count: count})
+		if reflect.TypeOf(data).Name() == "" || len(c.Query("wrap")) > 0 {
+			c.XML(http.StatusOK, Response{Data: data, Next: link, Count: count})
 		} else {
-			render.XML(w, r, data)
+			c.XML(http.StatusOK, data)
 		}
 	default:
-		if len(r.URL.Query().Get("wrap")) > 0 {
-			response.JSON(w, r, Response{Data: data, Next: link, Count: count})
+		if len(c.Query("wrap")) > 0 {
+			c.JSON(http.StatusOK, Response{Data: data, Next: link, Count: count})
 		} else {
-			response.JSON(w, r, data)
+			c.JSON(http.StatusOK, data)
 		}
 	}
 	return nil

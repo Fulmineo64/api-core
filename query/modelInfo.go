@@ -5,11 +5,11 @@ import (
 	"api_core/model"
 	"api_core/params"
 	"api_core/request"
-	"net/http"
 	"reflect"
 	"regexp"
 	"strings"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
@@ -28,7 +28,7 @@ type ModelInfo struct {
 	Distinct       bool
 }
 
-func GetModelInfo(r *http.Request, modelSchema *schema.Schema, selects string, modelInfo *ModelInfo, args *QueryArgs, config QueryConfig) message.Message {
+func GetModelInfo(c *gin.Context, modelSchema *schema.Schema, selects string, modelInfo *ModelInfo, args *QueryArgs, config QueryConfig) message.Message {
 	modelInfo.Table = strings.TrimSpace(modelInfo.Schema.Table)
 	if strings.HasSuffix(modelInfo.Table, ")") {
 		modelInfo.Table = queryTableName
@@ -105,7 +105,7 @@ func GetModelInfo(r *http.Request, modelSchema *schema.Schema, selects string, m
 							}
 							mdl := reflect.New(relSchema.ModelType).Interface()
 							if ordMdl, ok := mdl.(model.OrderedModel); ok {
-								n.ModelInfo.Order = ordMdl.DefaultOrder(request.DB(r), n.ModelInfo.Table)
+								n.ModelInfo.Order = ordMdl.DefaultOrder(request.DB(c), n.ModelInfo.Table)
 							}
 							l := len(rel.References)
 							var fk string
@@ -133,7 +133,7 @@ func GetModelInfo(r *http.Request, modelSchema *schema.Schema, selects string, m
 						key = ""
 					}
 				} else {
-					return message.InvalidRelation(r, strings.Join(pieces[:i+1], "."))
+					return message.InvalidRelation(c, strings.Join(pieces[:i+1], "."))
 				}
 			}
 			fieldName := pieces[len(pieces)-1]
@@ -155,7 +155,7 @@ func GetModelInfo(r *http.Request, modelSchema *schema.Schema, selects string, m
 			} else {
 				fld := relSchema.LookUpField(fieldName)
 				if fld == nil {
-					return message.InvalidField(r, field)
+					return message.InvalidField(c, field)
 				}
 				if (sum || count) && fieldAlias == "" {
 					fieldAlias = fieldName
@@ -181,10 +181,10 @@ func GetModelInfo(r *http.Request, modelSchema *schema.Schema, selects string, m
 					fn := mdl.MethodByName(funcName)
 					if fn.IsValid() {
 						info.ComputedFields = append(info.ComputedFields, ComputedField{
-							Fn: fn.Interface().(func(*http.Request, *gorm.DB, *ModelInfo, *map[string]any) error),
+							Fn: fn.Interface().(func(*gin.Context, *gorm.DB, *ModelInfo, *map[string]any) error),
 						})
 					} else {
-						return message.InvalidField(r, field.Name)
+						return message.InvalidField(c, field.Name)
 					}
 					// Here, instead of funcName, I would include the entire function
 				} else if funcName, ok := field.StructField.Tag.Lookup("query"); ok {
@@ -196,7 +196,7 @@ func GetModelInfo(r *http.Request, modelSchema *schema.Schema, selects string, m
 					fn := mdl.MethodByName(funcName)
 					if fn.IsValid() {
 						rels := map[string]*params.Conditions{}
-						msg := fn.Interface().(func(*http.Request, any, *schema.Schema, string, bool, *string, *[]any, map[string]*params.Conditions) message.Message)(r, mdl.Interface(), relSchema, table, len(pieces)-startIndex > 1, &sel, &info.SelectArgs, rels)
+						msg := fn.Interface().(func(*gin.Context, any, *schema.Schema, string, bool, *string, *[]any, map[string]*params.Conditions) message.Message)(c, mdl.Interface(), relSchema, table, len(pieces)-startIndex > 1, &sel, &info.SelectArgs, rels)
 						if msg != nil {
 							return msg
 						}
@@ -207,7 +207,7 @@ func GetModelInfo(r *http.Request, modelSchema *schema.Schema, selects string, m
 							fieldAlias = field.Name
 						}
 					} else {
-						return message.InvalidField(r, field.Name)
+						return message.InvalidField(c, field.Name)
 					}
 				} else if len(field.DBName) != 0 {
 					sel = table + "." + config.Dialector.EscapeField(field.DBName)
@@ -225,7 +225,7 @@ func GetModelInfo(r *http.Request, modelSchema *schema.Schema, selects string, m
 					if len(fieldAlias) > 0 {
 						regex := regexp.MustCompile(`^[\w*]+$`)
 						if !regex.MatchString(fieldAlias) {
-							return message.InvalidFieldAlias(r, fieldAlias, fieldName)
+							return message.InvalidFieldAlias(c, fieldAlias, fieldName)
 						}
 						structField.Name = strings.ReplaceAll(fieldAlias, "*", field.Name)
 						sel += " AS " + config.Dialector.EscapeField(structField.Name)
@@ -237,7 +237,7 @@ func GetModelInfo(r *http.Request, modelSchema *schema.Schema, selects string, m
 		}
 		// Throw an error if base model sel is empty
 		if len(modelInfo.Select) == 0 {
-			return message.MissingBaseResourceSelect(r, modelInfo.Table)
+			return message.MissingBaseResourceSelect(c, modelInfo.Table)
 		}
 	} else {
 		for _, field := range modelSchema.Fields {
@@ -248,12 +248,12 @@ func GetModelInfo(r *http.Request, modelSchema *schema.Schema, selects string, m
 		}
 	}
 	if len(args.Ord) > 0 {
-		msg := ParseOrder(r, args.Ord, modelInfo, config)
+		msg := ParseOrder(c, args.Ord, modelInfo, config)
 		if msg != nil {
 			return msg
 		}
 	} else if ordModel, ok := reflect.New(modelSchema.ModelType).Interface().(model.OrderedModel); ok {
-		modelInfo.Order = ordModel.DefaultOrder(request.DB(r), modelInfo.Table)
+		modelInfo.Order = ordModel.DefaultOrder(request.DB(c), modelInfo.Table)
 	} else if modelSchema.PrioritizedPrimaryField != nil {
 		modelInfo.Order = modelInfo.Table + "." + modelSchema.PrioritizedPrimaryField.DBName
 	}

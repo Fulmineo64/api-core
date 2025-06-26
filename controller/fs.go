@@ -6,15 +6,11 @@ import (
 	"api_core/model"
 	"api_core/permissions"
 	"api_core/request"
-	"api_core/response"
-	"api_core/route"
 	"api_core/utils"
 	"encoding/base64"
 	"fmt"
-	"io"
 	"io/fs"
 	"log"
-	"mime/multipart"
 	"net/http"
 	"os"
 	"path"
@@ -25,7 +21,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-chi/chi"
 	"gorm.io/gorm"
 )
 
@@ -33,8 +28,8 @@ func RemoveParentPaths(path string) string {
 	return filepath.Clean(strings.ReplaceAll(path, "..", ""))
 }
 
-func Folder(pathFunc func(*http.Request) string) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
+func Folder(pathFunc func(*gin.Context) string) func(*gin.Context) {
+	return func(c *gin.Context) {
 		type fileInfo struct {
 			NAME          string
 			PATH          string
@@ -45,9 +40,9 @@ func Folder(pathFunc func(*http.Request) string) func(http.ResponseWriter, *http
 		filesDetailed := []fileInfo{}
 		files := []string{}
 
-		detailed := r.URL.Query().Get("detailed")
+		detailed := c.Query("detailed")
 
-		basePath := pathFunc(r)
+		basePath := pathFunc(c)
 		err := filepath.Walk(basePath, func(path string, info fs.FileInfo, err error) error {
 			if err != nil {
 				return err
@@ -90,83 +85,81 @@ func Folder(pathFunc func(*http.Request) string) func(http.ResponseWriter, *http
 			log.Printf("Error walking the path %q: %v\n", basePath, err)
 		}
 		if detailed != "" {
-			response.JSON(w, r, gin.H{"files": filesDetailed})
+			c.JSON(http.StatusOK, gin.H{"files": filesDetailed})
 		} else {
-			response.JSON(w, r, gin.H{"files": files})
+			c.JSON(http.StatusOK, gin.H{"files": files})
 		}
 	}
 }
 
-func GetFile(pathFunc, nameFunc func(*http.Request) string) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		path := RemoveParentPaths(pathFunc(r))
-		name := nameFunc(r)
+func GetFile(pathFunc, nameFunc func(*gin.Context) string) func(*gin.Context) {
+	return func(c *gin.Context) {
+		path := RemoveParentPaths(pathFunc(c))
+		name := nameFunc(c)
 		file := filepath.Join(path, name)
 		if !strings.HasPrefix(filepath.Clean(file), path) {
-			message.Forbidden(r).Write(w, r)
+			message.Forbidden(c).Abort(c)
 			return
 		}
 
-		if r.URL.Query().Get("download") == "" && r.URL.Query().Get("base64") == "" {
-			w.Header().Set("Content-Disposition", "inline; filename="+name)
-		} else if r.URL.Query().Get("base64") != "" {
+		if c.Query("download") == "" && c.Query("base64") == "" {
+			c.Header("Content-Disposition", "inline; filename="+name)
+		} else if c.Query("base64") != "" {
 			bytebuffer, err := os.ReadFile(file)
 			if err != nil {
-				message.Forbidden(r).Write(w, r)
+				message.Forbidden(c).Abort(c)
 				return
 			}
 			content := base64.StdEncoding.EncodeToString(bytebuffer)
-			w.Header().Set("Content-Type", "application/octet-stream")
-			w.Write([]byte(content))
-			w.WriteHeader(http.StatusOK)
+			c.Data(http.StatusOK, "application/octet-stream", []byte(content))
 			return
 		} else {
-			w.Header().Set("Content-Description", "File Transfer")
-			w.Header().Set("Content-Transfer-Encoding", "binary")
-			w.Header().Set("Content-Disposition", "attachment; filename="+name)
-			w.Header().Set("Content-Type", "application/octet-stream")
+			c.Header("Content-Description", "File Transfer")
+			c.Header("Content-Transfer-Encoding", "binary")
+			c.Header("Content-Disposition", "attachment; filename="+name)
+			c.Header("Content-Type", "application/octet-stream")
 		}
-		http.ServeFile(w, r, file)
+		c.File(file)
 	}
 }
 
-func GetFileOrFolder(pathFunc, nameFunc func(*http.Request) string) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		path := RemoveParentPaths(pathFunc(r))
-		name := nameFunc(r)
+func GetFileOrFolder(pathFunc, nameFunc func(*gin.Context) string) func(*gin.Context) {
+	return func(c *gin.Context) {
+		path := RemoveParentPaths(pathFunc(c))
+		name := nameFunc(c)
 		file := filepath.Join(path, name)
 		if !strings.HasPrefix(filepath.Clean(file), path) {
-			message.Forbidden(r).Write(w, r)
+			message.Forbidden(c).Abort(c)
 			return
 		}
 
 		fileInfo, err := os.Stat(file)
 		if err != nil {
-			message.FileNotFound(r).Write(w, r)
+			message.FileNotFound(c).Abort(c)
 			return
 		}
 
 		if fileInfo.IsDir() {
-			folderFunc := func(r *http.Request) string {
+			folderFunc := func(c *gin.Context) string {
 				return file
 			}
-			Folder(folderFunc)(w, r)
+			Folder(folderFunc)(c)
 		} else {
-			filePathFunc := func(*http.Request) string {
+			filePathFunc := func(c *gin.Context) string {
 				return path
 			}
-			fileNameFunc := func(*http.Request) string {
+			fileNameFunc := func(c *gin.Context) string {
 				return name
 			}
-			GetFile(filePathFunc, fileNameFunc)(w, r)
+			GetFile(filePathFunc, fileNameFunc)(c)
 		}
 	}
 }
 
-func PostFile(pathFunc func(*http.Request) string) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		path := RemoveParentPaths(pathFunc(r))
-		numeroFiles := r.URL.Query().Get("numeroFiles")
+func PostFile(pathFunc func(*gin.Context) string) func(*gin.Context) {
+	return func(c *gin.Context) {
+		path := RemoveParentPaths(pathFunc(c))
+		numeroFiles := c.Query("numeroFiles")
 
 		if len(numeroFiles) > 0 {
 			fileLength, err := strconv.Atoi(numeroFiles)
@@ -175,79 +168,54 @@ func PostFile(pathFunc func(*http.Request) string) func(http.ResponseWriter, *ht
 				panic(err)
 			}
 			for i := 0; i < fileLength; i++ {
-				file, fileHeader, err := r.FormFile("file" + strconv.Itoa(i))
+				file, err := c.FormFile("file" + strconv.Itoa(i))
 				if err != nil {
-					message.BadRequest(r).Text(err.Error()).Write(w, r)
+					message.BadRequest(c).Text(err.Error()).Abort(c)
 					log.Println(err)
 					return
 				}
-				defer file.Close()
-				newFileName := fileHeader.Filename
-				err = SaveUploadedFile(file, filepath.Join(path, newFileName))
+				newFileName := file.Filename
+				err = c.SaveUploadedFile(file, filepath.Join(path, newFileName))
 				if err != nil {
-					message.InternalServerError(r).Text("Unable to save the file").Write(w, r)
+					message.InternalServerError(c).Text("Unable to save the file").Write(c)
 					return
 				}
 			}
 		} else {
-			file, fileHeader, err := r.FormFile("file")
+			file, err := c.FormFile("file")
 			if err != nil {
-				message.BadRequest(r).Text(err.Error()).Write(w, r)
+				message.BadRequest(c).Text(err.Error()).Write(c)
 				log.Println(err)
 				return
 			}
-			defer file.Close()
-			newFileName := fileHeader.Filename
-			err = SaveUploadedFile(file, filepath.Join(path, newFileName))
+			newFileName := file.Filename
+			err = c.SaveUploadedFile(file, filepath.Join(path, newFileName))
 			if err != nil {
-				message.InternalServerError(r).Text("Unable to save the file").Write(w, r)
+				message.InternalServerError(c).Text("Unable to save the file").Write(c)
 				return
 			}
 		}
-		message.Ok(r).Write(w, r)
+		message.Ok(c).JSON(c)
 	}
 }
 
-func SaveUploadedFile(file multipart.File, path string) error {
-	// Create the directory if it doesn't exist
-	err := os.MkdirAll(filepath.Dir(path), 0755)
-	if err != nil {
-		return err
-	}
-
-	// Create the file at the specified destination
-	out, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	// Copy the content of the uploaded file to the destination file
-	_, err = io.Copy(out, file)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func DeleteFile(pathFunc, nameFunc func(*http.Request) string) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		path := RemoveParentPaths(pathFunc(r))
-		name := nameFunc(r)
+func DeleteFile(pathFunc, nameFunc func(*gin.Context) string) func(*gin.Context) {
+	return func(c *gin.Context) {
+		path := RemoveParentPaths(pathFunc(c))
+		name := nameFunc(c)
 		file := filepath.Join(path, name)
 		if !strings.HasPrefix(filepath.Clean(file), path) {
-			message.Forbidden(r).Write(w, r)
+			message.Forbidden(c).Abort(c)
 			return
 		}
 		err := os.Remove(file)
 		if err != nil {
 			if !os.IsNotExist(err) {
-				request.AbortWithError(w, r, err)
+				request.AbortWithError(c, err)
 				return
 			}
 		}
-		message.Ok(r).Write(w, r)
+		message.Ok(c).JSON(c)
 	}
 }
 
@@ -269,13 +237,13 @@ func CheckResourceAvailable(db *gorm.DB, mdl any) bool {
 	return true
 }
 
-func GetAllFileInFolder(pathFunc func(*http.Request) string) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
+func GetAllFileInFolder(pathFunc func(*gin.Context) string) func(c *gin.Context) {
+	return func(c *gin.Context) {
 
-		path := RemoveParentPaths(pathFunc(r))
+		path := RemoveParentPaths(pathFunc(c))
 		dirCon, err := os.ReadDir(path)
 		if err != nil {
-			message.Forbidden(r).Write(w, r)
+			message.Forbidden(c).Abort(c)
 			return
 		}
 		arrayNames := []string{}
@@ -286,7 +254,7 @@ func GetAllFileInFolder(pathFunc func(*http.Request) string) func(http.ResponseW
 				arrayNames = append(arrayNames, filepath.Join(path, name))
 			}
 		}
-		response.JSON(w, r, arrayNames)
+		c.JSON(http.StatusOK, arrayNames)
 	}
 }
 
@@ -302,24 +270,24 @@ type FileSystemOptions struct {
 	SubFolder bool
 }
 
-func FileSystem(apiPath string, filePath func(*http.Request) string, fsPermissions FileSystemPermissions, options FileSystemOptions) []route.Route {
-	routes := []route.Route{}
-	routes = append(routes, route.Route{Method: http.MethodGet, Pattern: apiPath, Handler: Folder(filePath), Permissions: permissions.Merge(fsPermissions.Get, fsPermissions.Conditions)})
-	routes = append(routes, route.Route{Method: http.MethodPost, Pattern: apiPath, Handler: PostFile(filePath), Permissions: permissions.Merge(fsPermissions.Post, fsPermissions.Conditions)})
+func FileSystem(apiPath string, filePath func(*gin.Context) string, fsPermissions FileSystemPermissions, options FileSystemOptions) []interfaces.Route {
+	routes := []interfaces.Route{}
+	routes = append(routes, interfaces.Route{Method: http.MethodGet, Pattern: apiPath, Handler: Folder(filePath), Permissions: permissions.Merge(fsPermissions.Get, fsPermissions.Conditions)})
+	routes = append(routes, interfaces.Route{Method: http.MethodPost, Pattern: apiPath, Handler: PostFile(filePath), Permissions: permissions.Merge(fsPermissions.Post, fsPermissions.Conditions)})
 	if options.SubFolder {
-		routes = append(routes, route.Route{Method: http.MethodGet, Pattern: apiPath + "/{name}", Handler: GetFileOrFolder(filePath, func(r *http.Request) string { return chi.URLParam(r, "name") }), Permissions: permissions.Merge(fsPermissions.GetFile, fsPermissions.Conditions)})
+		routes = append(routes, interfaces.Route{Method: http.MethodGet, Pattern: apiPath + "/{name}", Handler: GetFileOrFolder(filePath, func(c *gin.Context) string { return c.Param("name") }), Permissions: permissions.Merge(fsPermissions.GetFile, fsPermissions.Conditions)})
 	} else {
-		routes = append(routes, route.Route{Method: http.MethodGet, Pattern: apiPath + "/{name}", Handler: GetFile(filePath, func(r *http.Request) string { return chi.URLParam(r, "name") }), Permissions: permissions.Merge(fsPermissions.GetFile, fsPermissions.Conditions)})
+		routes = append(routes, interfaces.Route{Method: http.MethodGet, Pattern: apiPath + "/{name}", Handler: GetFile(filePath, func(c *gin.Context) string { return c.Param("name") }), Permissions: permissions.Merge(fsPermissions.GetFile, fsPermissions.Conditions)})
 	}
-	routes = append(routes, route.Route{Method: http.MethodDelete, Pattern: apiPath + "/{name}", Handler: DeleteFile(filePath, func(r *http.Request) string { return chi.URLParam(r, "name") }), Permissions: permissions.Merge(fsPermissions.Delete, fsPermissions.Conditions)})
+	routes = append(routes, interfaces.Route{Method: http.MethodDelete, Pattern: apiPath + "/{name}", Handler: DeleteFile(filePath, func(c *gin.Context) string { return c.Param("name") }), Permissions: permissions.Merge(fsPermissions.Delete, fsPermissions.Conditions)})
 
 	if options.SubFolder {
-		filePathFolder := func(r *http.Request) string {
-			return path.Join(filePath(r), chi.URLParam(r, "name"))
+		filePathFolder := func(c *gin.Context) string {
+			return path.Join(filePath(c), c.Param("name"))
 		}
-		routes = append(routes, route.Route{Method: http.MethodPost, Pattern: apiPath + "/{name}", Handler: PostFile(filePathFolder), Permissions: permissions.Merge(fsPermissions.Post, fsPermissions.Conditions)})
-		routes = append(routes, route.Route{Method: http.MethodGet, Pattern: apiPath + "/{name}/{fileName}", Handler: GetFile(filePathFolder, func(r *http.Request) string { return chi.URLParam(r, "fileName") }), Permissions: permissions.Merge(fsPermissions.GetFile, fsPermissions.Conditions)})
-		routes = append(routes, route.Route{Method: http.MethodDelete, Pattern: apiPath + "/{name}/{fileName}", Handler: DeleteFile(filePathFolder, func(r *http.Request) string { return chi.URLParam(r, "fileName") }), Permissions: permissions.Merge(fsPermissions.Delete, fsPermissions.Conditions)})
+		routes = append(routes, interfaces.Route{Method: http.MethodPost, Pattern: apiPath + "/{name}", Handler: PostFile(filePathFolder), Permissions: permissions.Merge(fsPermissions.Post, fsPermissions.Conditions)})
+		routes = append(routes, interfaces.Route{Method: http.MethodGet, Pattern: apiPath + "/{name}/{fileName}", Handler: GetFile(filePathFolder, func(c *gin.Context) string { return c.Param("fileName") }), Permissions: permissions.Merge(fsPermissions.GetFile, fsPermissions.Conditions)})
+		routes = append(routes, interfaces.Route{Method: http.MethodDelete, Pattern: apiPath + "/{name}/{fileName}", Handler: DeleteFile(filePathFolder, func(c *gin.Context) string { return c.Param("fileName") }), Permissions: permissions.Merge(fsPermissions.Delete, fsPermissions.Conditions)})
 	}
 	return routes
 }
@@ -333,10 +301,10 @@ func DefaultFileSystemPermissions(ctrl interfaces.Modeler) FileSystemPermissions
 		Delete:  permissions.Delete(mdl),
 	}
 	if condMdl, ok := mdl.(model.ConditionsModel); ok {
-		fsPermissions.Conditions = func(r *http.Request) error {
-			db := request.DB(r)
+		fsPermissions.Conditions = func(c *gin.Context) error {
+			db := c.MustGet("db").(*gorm.DB)
 			primaries := map[string]interface{}{}
-			msg := GetPathParamsMsg(r, mdl, utils.GetPrimaryFields(reflect.TypeOf(mdl)), &primaries)
+			msg := GetPathParamsMsg(c, mdl, utils.GetPrimaryFields(reflect.TypeOf(mdl)), &primaries)
 			if msg != nil {
 				return msg
 			}
@@ -352,7 +320,7 @@ func DefaultFileSystemPermissions(ctrl interfaces.Modeler) FileSystemPermissions
 			tx.Count(&count)
 
 			if count == 0 {
-				return message.ItemNotFound(r)
+				return message.ItemNotFound(c)
 			}
 			return nil
 		}

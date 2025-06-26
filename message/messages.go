@@ -3,14 +3,16 @@ package message
 import (
 	"net/http"
 	"strings"
+
+	"github.com/gin-gonic/gin"
 )
 
 // 2** - Success
 
 // 200
-func Ok(r *http.Request) Message {
+func Ok(c *gin.Context) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("Task performed successfully"),
+		Message: GetPrinter(c).Sprintf("Task performed successfully"),
 		Status:  http.StatusOK,
 	}
 }
@@ -18,9 +20,9 @@ func Ok(r *http.Request) Message {
 // 3** - User error
 
 // 307
-func ItemFound(r *http.Request) Message {
+func ItemFound(c *gin.Context) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("Item found"),
+		Message: GetPrinter(c).Sprintf("Item found"),
 		Status:  http.StatusTemporaryRedirect,
 	}
 }
@@ -28,296 +30,296 @@ func ItemFound(r *http.Request) Message {
 // 4** - User error
 
 // 400
-func BadRequest(r *http.Request) Message {
+func BadRequest(c *gin.Context) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("Bad request"),
+		Message: GetPrinter(c).Sprintf("Bad request"),
 		Status:  http.StatusBadRequest,
 	}
 }
 
-func InvalidUrlParameter(r *http.Request, parameter string) Message {
+func InvalidUrlParameter(c *gin.Context, parameter string) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("Missing or invalid required %s field in URL", parameter),
+		Message: GetPrinter(c).Sprintf("Missing or invalid required %s field in URL", parameter),
 		Status:  http.StatusBadRequest,
 	}
 }
 
 // 403
-func Forbidden(r *http.Request) Message {
+func Forbidden(c *gin.Context) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("Forbidden"),
+		Message: GetPrinter(c).Sprintf("Forbidden"),
 		Status:  http.StatusForbidden,
 	}
 }
 
-func InsufficientPermissions(r *http.Request, permissions ...string) Message {
+func InsufficientPermissions(c *gin.Context, permissions ...string) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("Permissions %s are required to access this resource, please contact your administrator", strings.Join(permissions, ",")),
+		Message: GetPrinter(c).Sprintf("Permissions %s are required to access this resource, please contact your administrator", strings.Join(permissions, ",")),
 		Status:  http.StatusForbidden,
 	}
 }
 
-func InsufficientPermissionsHasOne(r *http.Request, permissions ...string) Message {
+func InsufficientPermissionsHasOne(c *gin.Context, permissions ...string) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("Permissions %s are required to access this resource, please contact your administrator", strings.Join(permissions, ",")),
+		Message: GetPrinter(c).Sprintf("Permissions %s are required to access this resource, please contact your administrator", strings.Join(permissions, ",")),
 		Status:  http.StatusForbidden,
 	}
 }
 
-func UnauthorizedRelations(r *http.Request, relations ...string) Message {
+func UnauthorizedRelations(c *gin.Context, relations ...string) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("You do not have sufficient permissions to access the following relations: %s", strings.Join(relations, ",")),
+		Message: GetPrinter(c).Sprintf("You do not have sufficient permissions to access the following relations: %s", strings.Join(relations, ",")),
 		Status:  http.StatusForbidden,
 	}
 }
 
 // 404
-func ItemNotFound(r *http.Request) Message {
+func ItemNotFound(c *gin.Context) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("The requested item was not found"),
+		Message: GetPrinter(c).Sprintf("The requested item was not found"),
 		Status:  http.StatusNotFound,
 	}
 }
 
-func FileNotFound(r *http.Request) Message {
+func FileNotFound(c *gin.Context) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("The requested file was not found"),
+		Message: GetPrinter(c).Sprintf("The requested file was not found"),
 		Status:  http.StatusNotFound,
 	}
 }
 
-func FolderNotFound(r *http.Request) Message {
+func FolderNotFound(c *gin.Context) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("The requested folder was not found"),
+		Message: GetPrinter(c).Sprintf("The requested folder was not found"),
 		Status:  http.StatusNotFound,
 	}
 }
 
 // 409
-func Conflict(r *http.Request) Message {
+func Conflict(c *gin.Context) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("Conflict"),
+		Message: GetPrinter(c).Sprintf("Conflict"),
 		Status:  http.StatusConflict,
 	}
 }
 
-func DeleteFailed(r *http.Request, blockingRelations []string) Message {
+func DeleteFailed(c *gin.Context, blockingRelations []string) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("Cannot delete the requested resource because it belongs to the following relations.<br>%s", strings.Join(blockingRelations, "<br>")),
+		Message: GetPrinter(c).Sprintf("Cannot delete the requested resource because it belongs to the following relations.<br>%s", strings.Join(blockingRelations, "<br>")),
 		Status:  http.StatusConflict,
 	}
 }
 
-func DuplicateUnique(r *http.Request, table, combination string) Message {
+func DuplicateUnique(c *gin.Context, table, combination string) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("The combination %s already exists for %s", combination, table),
+		Message: GetPrinter(c).Sprintf("The combination %s already exists for %s", combination, table),
 		Status:  http.StatusConflict,
 	}
 }
 
-func CannotDeleteSharedResource(r *http.Request) Message {
+func CannotDeleteSharedResource(c *gin.Context) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("Cannot delete the shared resource as you aren't its owner"),
+		Message: GetPrinter(c).Sprintf("Cannot delete the shared resource as you aren't its owner"),
 		// You cannot delete the shared resource because you are not the owner
 		Status: http.StatusConflict,
 	}
 }
 
-func ConflictingPaginationAndAggregation(r *http.Request) Message {
+func ConflictingPaginationAndAggregation(c *gin.Context) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("Pagination is not supported with aggregations"),
+		Message: GetPrinter(c).Sprintf("Pagination is not supported with aggregations"),
 		Status:  http.StatusConflict,
 	}
 }
 
-func ConflictingOrderByAndDistinct(r *http.Request) Message {
+func ConflictingOrderByAndDistinct(c *gin.Context) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("The Order field must be specified in the Select field when using Distinct"),
+		Message: GetPrinter(c).Sprintf("The Order field must be specified in the Select field when using Distinct"),
 		Status:  http.StatusConflict,
 	}
 }
 
-func ConflictingUsername(r *http.Request) Message {
+func ConflictingUsername(c *gin.Context) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("The username is already registered"),
+		Message: GetPrinter(c).Sprintf("The username is already registered"),
 		Status:  http.StatusConflict,
 	}
 }
 
-func ManualPagination(r *http.Request) Message {
+func ManualPagination(c *gin.Context) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("To paginate this request you must specify the Order attribute manually via the 'ord' param"),
+		Message: GetPrinter(c).Sprintf("To paginate this request you must specify the Order attribute manually via the 'ord' param"),
 		Status:  http.StatusConflict,
 	}
 }
 
-func MissingRequiredParameter(r *http.Request, name, in string) Message {
+func MissingRequiredParameter(c *gin.Context, name, in string) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("Missing required parameter %s in %s", name, in),
+		Message: GetPrinter(c).Sprintf("Missing required parameter %s in %s", name, in),
 		Status:  http.StatusConflict,
 	}
 }
 
-func MissingRequiredParameterForQueryField(r *http.Request, name, field string) Message {
+func MissingRequiredParameterForQueryField(c *gin.Context, name, field string) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("Missing required parameter %s in query (eg. &%s=3) for query field %s", name, field),
+		Message: GetPrinter(c).Sprintf("Missing required parameter %s in query (eg. &%s=3) for query field %s", name, field),
 		Status:  http.StatusConflict,
 	}
 }
 
-func MissingForeignKey(r *http.Request, key, rel string) Message {
+func MissingForeignKey(c *gin.Context, key, rel string) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("Could not find the foreign key %s, required by the relation %s, in its parent object.", key, rel),
+		Message: GetPrinter(c).Sprintf("Could not find the foreign key %s, required by the relation %s, in its parent object.", key, rel),
 		Status:  http.StatusConflict,
 	}
 }
 
-func CannotCreatePrint(r *http.Request) Message {
+func CannotCreatePrint(c *gin.Context) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("Could not print the warehouseman order print when the order has not been accepted."),
+		Message: GetPrinter(c).Sprintf("Could not print the warehouseman order print when the order has not been accepted."),
 		Status:  http.StatusConflict,
 	}
 }
 
-func MissingBaseResourceSelect(r *http.Request, baseResource string) Message {
+func MissingBaseResourceSelect(c *gin.Context, baseResource string) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("Please select at least one element from the base resource %s before accessing nested resources.", baseResource),
+		Message: GetPrinter(c).Sprintf("Please select at least one element from the base resource %s before accessing nested resources.", baseResource),
 		Status:  http.StatusConflict,
 	}
 }
 
 // 422
-func Unprocessable(r *http.Request) Message {
+func Unprocessable(c *gin.Context) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("The submitted request present invalid or incomplete data"),
+		Message: GetPrinter(c).Sprintf("The submitted request present invalid or incomplete data"),
 		Status:  http.StatusUnprocessableEntity,
 	}
 }
 
-func InvalidJSON(r *http.Request) Message {
+func InvalidJSON(c *gin.Context) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("Missing or invalid JSON body"),
+		Message: GetPrinter(c).Sprintf("Missing or invalid JSON body"),
 		Status:  http.StatusUnprocessableEntity,
 	}
 }
 
-func InvalidParamsJSON(r *http.Request) Message {
+func InvalidParamsJSON(c *gin.Context) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("The supplied params JSON isn't syntactically valid"),
+		Message: GetPrinter(c).Sprintf("The supplied params JSON isn't syntactically valid"),
 		Status:  http.StatusUnprocessableEntity,
 	}
 }
 
-func InvalidParamsSyntax(r *http.Request) Message {
+func InvalidParamsSyntax(c *gin.Context) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("The request cannot be completed due to invalid params syntax"),
+		Message: GetPrinter(c).Sprintf("The request cannot be completed due to invalid params syntax"),
 		Status:  http.StatusUnprocessableEntity,
 	}
 }
 
-func InvalidField(r *http.Request, field string) Message {
+func InvalidField(c *gin.Context, field string) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("The requested field %s could not be found", field),
+		Message: GetPrinter(c).Sprintf("The requested field %s could not be found", field),
 		Status:  http.StatusUnprocessableEntity,
 	}
 }
 
-func InvalidFieldValue(r *http.Request, field, rules string, value interface{}) Message {
+func InvalidFieldValue(c *gin.Context, field, rules string, value interface{}) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("The specified value %v for the field %s must respect these constraits %s", value, field, rules),
+		Message: GetPrinter(c).Sprintf("The specified value %v for the field %s must respect these constraits %s", value, field, rules),
 		Status:  http.StatusUnprocessableEntity,
 	}
 }
 
-func InvalidFieldAlias(r *http.Request, alias, field string) Message {
+func InvalidFieldAlias(c *gin.Context, alias, field string) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("The alias %s specified for the field %s is invalid", alias, field),
+		Message: GetPrinter(c).Sprintf("The alias %s specified for the field %s is invalid", alias, field),
 		Status:  http.StatusUnprocessableEntity,
 	}
 }
 
-func InvalidParamOperator(r *http.Request, operator string) Message {
+func InvalidParamOperator(c *gin.Context, operator string) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("The params operator %s is not supported", operator),
+		Message: GetPrinter(c).Sprintf("The params operator %s is not supported", operator),
 		Status:  http.StatusUnprocessableEntity,
 	}
 }
 
-func InvalidParamType(r *http.Request, field string, correctType string) Message {
+func InvalidParamType(c *gin.Context, field string, correctType string) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("The supplied field \"%s\" needs to be of type \"%s\"", field, correctType),
+		Message: GetPrinter(c).Sprintf("The supplied field \"%s\" needs to be of type \"%s\"", field, correctType),
 		Status:  http.StatusUnprocessableEntity,
 	}
 }
 
-func InvalidRelation(r *http.Request, table string) Message {
+func InvalidRelation(c *gin.Context, table string) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("Missing or invalid specified relation %s", table),
+		Message: GetPrinter(c).Sprintf("Missing or invalid specified relation %s", table),
 		Status:  http.StatusUnprocessableEntity,
 	}
 }
 
-func InvalidRelations(r *http.Request, relations ...string) Message {
+func InvalidRelations(c *gin.Context, relations ...string) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("The request cannot be completed due to invalid specified relations: %s", strings.Join(relations, ",")),
+		Message: GetPrinter(c).Sprintf("The request cannot be completed due to invalid specified relations: %s", strings.Join(relations, ",")),
 		Status:  http.StatusUnprocessableEntity,
 	}
 }
 
-func InvalidOrders(r *http.Request, orders ...string) Message {
+func InvalidOrders(c *gin.Context, orders ...string) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("The request cannot be completed due to invalid specified order by: %s", strings.Join(orders, ",")),
+		Message: GetPrinter(c).Sprintf("The request cannot be completed due to invalid specified order by: %s", strings.Join(orders, ",")),
 		Status:  http.StatusUnprocessableEntity,
 	}
 }
 
-func DuplicateStructField(r *http.Request, field string) Message {
+func DuplicateStructField(c *gin.Context, field string) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("Duplicate struct field %s, use an alias to avoid this error (eg. field AS alias)", field),
+		Message: GetPrinter(c).Sprintf("Duplicate struct field %s, use an alias to avoid this error (eg. field AS alias)", field),
 		Status:  http.StatusUnprocessableEntity,
 	}
 }
 
-func InvalidFieldRequired(r *http.Request, name string) Message {
+func InvalidFieldRequired(c *gin.Context, name string) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("The %s property is required", name),
+		Message: GetPrinter(c).Sprintf("The %s property is required", name),
 		Status:  http.StatusUnprocessableEntity,
 	}
 }
 
-func RowError(r *http.Request, row int, message string) Message {
+func RowError(c *gin.Context, row int, message string) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("Row %d:%s", row, message),
+		Message: GetPrinter(c).Sprintf("Row %d:%s", row, message),
 		Status:  http.StatusUnprocessableEntity,
 	}
 }
 
-func DisplayNameNotSupported(r *http.Request) Message {
+func DisplayNameNotSupported(c *gin.Context) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("This resource doesn't support DISPLAY_NAME"),
+		Message: GetPrinter(c).Sprintf("This resource doesn't support DISPLAY_NAME"),
 		Status:  http.StatusUnprocessableEntity,
 	}
 }
 
 // 5** - Server error
 
-func InternalServerError(r *http.Request) Message {
+func InternalServerError(c *gin.Context) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("An error has occurred"),
+		Message: GetPrinter(c).Sprintf("An error has occurred"),
 		Status:  http.StatusInternalServerError,
 	}
 }
 
-func ExpectedSlice(r *http.Request) Message {
+func ExpectedSlice(c *gin.Context) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("The supplied parameter isn't of type *[]models.*"),
+		Message: GetPrinter(c).Sprintf("The supplied parameter isn't of type *[]models.*"),
 		Status:  http.StatusInternalServerError,
 	}
 }
 
-func UnsupportedParamType(r *http.Request, parameter string) Message {
+func UnsupportedParamType(c *gin.Context, parameter string) Message {
 	return &Msg{
-		Message: GetPrinter(r).Sprintf("The supplied parameter %s isn't supported yet. This is an error", parameter),
+		Message: GetPrinter(c).Sprintf("The supplied parameter %s isn't supported yet. This is an error", parameter),
 		Status:  http.StatusInternalServerError,
 	}
 }

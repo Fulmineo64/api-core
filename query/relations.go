@@ -1,7 +1,6 @@
 package query
 
 import (
-	"net/http"
 	"reflect"
 	"regexp"
 	"sort"
@@ -11,6 +10,7 @@ import (
 	"api_core/model"
 	"api_core/params"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
@@ -18,7 +18,7 @@ import (
 const queryTableName = "ORIGIN"
 
 type ComputedField struct {
-	Fn func(*http.Request, *gorm.DB, *ModelInfo, *map[string]any) error
+	Fn func(*gin.Context, *gorm.DB, *ModelInfo, *map[string]any) error
 }
 
 type NestedModel struct {
@@ -31,7 +31,7 @@ func (n NestedModel) NextNested() map[string]NestedModel {
 	return n.ModelInfo.Nested
 }
 
-func JoinRelations(r *http.Request, d *gorm.DB, config QueryConfig, modelInfo *ModelInfo, relations map[string]*params.Conditions) {
+func JoinRelations(c *gin.Context, d *gorm.DB, config QueryConfig, modelInfo *ModelInfo, relations map[string]*params.Conditions) {
 	joins := ""
 	joinsArgs := []interface{}{}
 	joinedTables := map[string]*schema.Schema{}
@@ -84,7 +84,7 @@ func JoinRelations(r *http.Request, d *gorm.DB, config QueryConfig, modelInfo *M
 					}
 				}
 			} else {
-				d.AddError(message.InvalidRelations(r, strings.Join(pieces[:i+1], ".")))
+				d.AddError(message.InvalidRelations(c, strings.Join(pieces[:i+1], ".")))
 				return
 			}
 		}
@@ -117,7 +117,7 @@ func ModelToTableNames(stmt *string, modelSchema *schema.Schema) []string {
 	return relations
 }
 
-func ParseOrder(r *http.Request, order string, info *ModelInfo, config QueryConfig) message.Message {
+func ParseOrder(c *gin.Context, order string, info *ModelInfo, config QueryConfig) message.Message {
 	if len(order) > 0 {
 		local := []string{}
 		nested := map[string][]string{}
@@ -152,7 +152,7 @@ func ParseOrder(r *http.Request, order string, info *ModelInfo, config QueryConf
 					if rel, ok := relSchema.Relationships.Relations[strings.TrimPrefix(pieces[i], ">")]; ok {
 						relSchema = rel.FieldSchema
 					} else {
-						return message.InvalidRelation(r, strings.Join(pieces[:i+1], "."))
+						return message.InvalidRelation(c, strings.Join(pieces[:i+1], "."))
 					}
 				}
 
@@ -179,7 +179,7 @@ func ParseOrder(r *http.Request, order string, info *ModelInfo, config QueryConf
 						}
 						local = append(local, search)
 					} else {
-						return message.InvalidField(r, field)
+						return message.InvalidField(c, field)
 					}
 				}
 
@@ -203,7 +203,7 @@ func ParseOrder(r *http.Request, order string, info *ModelInfo, config QueryConf
 							}
 						}
 						if !found {
-							return message.ConflictingOrderByAndDistinct(r)
+							return message.ConflictingOrderByAndDistinct(c)
 						}
 					}
 
@@ -228,12 +228,12 @@ func ParseOrder(r *http.Request, order string, info *ModelInfo, config QueryConf
 
 		for key, nestedArray := range nested {
 			if n, ok := info.Nested[key]; ok {
-				msg := ParseOrder(r, strings.Join(nestedArray, ","), n.ModelInfo, config)
+				msg := ParseOrder(c, strings.Join(nestedArray, ","), n.ModelInfo, config)
 				if msg != nil {
 					return msg
 				}
 			} else {
-				return message.InvalidRelation(r, key)
+				return message.InvalidRelation(c, key)
 			}
 		}
 
@@ -255,10 +255,10 @@ func RelationsFromModelInfo(mdl *ModelInfo, otherRelations map[string]*params.Co
 	return set
 }
 
-func GetRelations(r *http.Request) []string {
+func GetRelations(c *gin.Context) []string {
 	var relations []string
-	if len(r.URL.Query().Get("rel")) > 0 {
-		relations = strings.Split(strings.ReplaceAll(r.URL.Query().Get("rel"), " ", ""), ",")
+	if len(c.Query("rel")) > 0 {
+		relations = strings.Split(strings.ReplaceAll(c.Query("rel"), " ", ""), ",")
 	}
 	return relations
 }

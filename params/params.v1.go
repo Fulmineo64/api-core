@@ -2,16 +2,16 @@ package params
 
 import (
 	"fmt"
-	"net/http"
 	"reflect"
 	"strings"
 
 	"api_core/message"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm/schema"
 )
 
-func parseParams(r *http.Request, modelSchema *schema.Schema, alias string, params []interface{}, conds *Conditions, allowed map[string]struct{}) message.Message {
+func parseParams(c *gin.Context, modelSchema *schema.Schema, alias string, params []interface{}, conds *Conditions, allowed map[string]struct{}) message.Message {
 	var operator string
 	for _, item := range params {
 		switch v := item.(type) {
@@ -26,18 +26,18 @@ func parseParams(r *http.Request, modelSchema *schema.Schema, alias string, para
 				if field, ok = rawField.(string); ok {
 					_, ok := allowed[field]
 					if allowed == nil || ok {
-						if parsedField, args, found := parseField(r, modelSchema, alias, field, conds.Nested); found {
+						if parsedField, args, found := parseField(c, modelSchema, alias, field, conds.Nested); found {
 							conds.Args = append(conds.Args, args...)
-							err := parseStructuredParam(r, parsedField, v, operator, conds)
+							err := parseStructuredParam(c, parsedField, v, operator, conds)
 							if err != nil {
 								return err
 							}
 						} else {
-							return message.InvalidField(r, field)
+							return message.InvalidField(c, field)
 						}
 					}
 				} else {
-					return message.InvalidParamType(r, "field", "string")
+					return message.InvalidParamType(c, "field", "string")
 				}
 			} else {
 				// Field parameter: value
@@ -48,12 +48,12 @@ func parseParams(r *http.Request, modelSchema *schema.Schema, alias string, para
 				for field, value := range v {
 					_, ok := allowed[field]
 					if allowed == nil || ok {
-						if parsedField, args, found := parseField(r, modelSchema, alias, field, conds.Nested); found {
+						if parsedField, args, found := parseField(c, modelSchema, alias, field, conds.Nested); found {
 							conds.Args = append(conds.Args, args...)
 
 							parseDynamicParam(parsedField, value, operator, conds)
 						} else {
-							return message.InvalidField(r, field)
+							return message.InvalidField(c, field)
 						}
 					}
 				}
@@ -64,19 +64,19 @@ func parseParams(r *http.Request, modelSchema *schema.Schema, alias string, para
 		case []interface{}:
 			addOperator(&operator, &(*conds).Query)
 			conds.Query += "("
-			err := parseParams(r, modelSchema, alias, v, conds, allowed)
+			err := parseParams(c, modelSchema, alias, v, conds, allowed)
 			if err != nil {
 				return err
 			}
 			conds.Query += ")\n"
 		default:
-			return message.Conflict(r).Text(fmt.Sprintf("invalid parameter of type %T", v))
+			return message.Conflict(c).Text(fmt.Sprintf("invalid parameter of type %T", v))
 		}
 	}
 	return nil
 }
 
-func parseField(r *http.Request, modelSchema *schema.Schema, alias, key string, relations map[string]*Conditions) (string, []any, bool) {
+func parseField(c *gin.Context, modelSchema *schema.Schema, alias, key string, relations map[string]*Conditions) (string, []any, bool) {
 	var field *schema.Field
 	var table string
 	if strings.Contains(key, ".") {
@@ -114,7 +114,7 @@ func parseField(r *http.Request, modelSchema *schema.Schema, alias, key string, 
 			var sel string
 			args := []any{}
 			rels := map[string]*Conditions{}
-			msg := fn.Interface().(func(*http.Request, any, *schema.Schema, string, bool, *string, *[]any, map[string]*Conditions) message.Message)(r, mdl.Interface(), modelSchema, table, false, &sel, &args, rels)
+			msg := fn.Interface().(func(*gin.Context, any, *schema.Schema, string, bool, *string, *[]any, map[string]*Conditions) message.Message)(c, mdl.Interface(), modelSchema, table, false, &sel, &args, rels)
 			if msg != nil {
 				panic(msg)
 			}
@@ -130,7 +130,7 @@ func parseField(r *http.Request, modelSchema *schema.Schema, alias, key string, 
 	}
 }
 
-func parseStructuredParam(r *http.Request, field string, param map[string]interface{}, operator string, conds *Conditions) message.Message {
+func parseStructuredParam(c *gin.Context, field string, param map[string]interface{}, operator string, conds *Conditions) message.Message {
 	addOperator(&operator, &(*conds).Query)
 	op, _ := param["operator"].(string)
 	conditionOperator := strings.ToUpper(strings.TrimSpace(op))
@@ -162,7 +162,7 @@ func parseStructuredParam(r *http.Request, field string, param map[string]interf
 	case "IS NULL", "IS NOT NULL":
 		conds.Query += field + " " + conditionOperator
 	default:
-		return message.InvalidParamOperator(r, conditionOperator)
+		return message.InvalidParamOperator(c, conditionOperator)
 	}
 	return nil
 }

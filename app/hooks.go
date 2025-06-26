@@ -2,28 +2,29 @@ package app
 
 import (
 	"log"
-	"net/http"
 
 	"api_core/message"
+
+	"github.com/gin-gonic/gin"
 )
 
 type AbortWithErrorHook struct {
-	Hook[func(http.ResponseWriter, *http.Request, error)]
+	Hook[func(*gin.Context, error)]
 }
 
-func (h *AbortWithErrorHook) Run(w http.ResponseWriter, r *http.Request, err error) {
+func (h *AbortWithErrorHook) Run(c *gin.Context, err error) {
 	for _, fn := range h.Funcs {
-		fn(w, r, err)
+		fn(c, err)
 	}
 }
 
 type OnRecoverHook struct {
-	Hook[func(http.ResponseWriter, *http.Request, string)]
+	Hook[func(*gin.Context, string)]
 }
 
-func (h *OnRecoverHook) Run(w http.ResponseWriter, r *http.Request, err string) {
+func (h *OnRecoverHook) Run(c *gin.Context, err string) {
 	for _, fn := range h.Funcs {
-		fn(w, r, err)
+		fn(c, err)
 	}
 }
 
@@ -35,15 +36,15 @@ type ControllerHooks struct {
 var Hooks = ControllerHooks{}
 
 func init() {
-	Hooks.AbortWithError.Add("default", func(w http.ResponseWriter, r *http.Request, err error) {
+	Hooks.AbortWithError.Add("default", func(c *gin.Context, err error) {
 		if msg, ok := err.(message.Message); ok {
-			msg.Write(w, r)
+			msg.Write(c)
 		} else {
 			log.Println(err)
-			message.InternalServerError(r).Write(w, r)
+			message.InternalServerError(c).Write(c)
 		}
 	})
-	Hooks.OnRecover.Add("default", func(w http.ResponseWriter, r *http.Request, err string) {
+	Hooks.OnRecover.Add("default", func(c *gin.Context, err string) {
 		log.Printf("recovered panic: %s\n", err)
 	})
 }
