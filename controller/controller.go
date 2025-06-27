@@ -1,13 +1,9 @@
 package controller
 
-type Controller struct {
-	path string
+import "api_core/app"
+
+func init() {
+	RegisterModels(&app.SessionModel{})
 }
 
-func (c *Controller) SetPath(path string) {
-	c.path = path
-}
-
-func (c *Controller) Path() string {
-	return c.path
-}
+type Controller struct{}

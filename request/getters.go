@@ -31,9 +31,11 @@ func Session(c *gin.Context) *app.Session {
 	return SessionGetter(c)
 }
 
+type DbContextKey string
+
 var (
-	GinKey     string = "gin"
-	DBKey      string = "db"
-	I18nKey    string = "i18n"
-	SessionKey string = "s"
+	GinKey     DbContextKey = "gin"
+	DBKey      string       = "db"
+	I18nKey    string       = "i18n"
+	SessionKey string       = "s"
 )

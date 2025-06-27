@@ -14,11 +14,6 @@ type Route struct {
 	Handler     gin.HandlerFunc
 }
 
-func (rt Route) Authenticate(c *gin.Context) error {
-	// TODO: Apply authentication here
-	return permissions.Validate(c, rt.Permissions)
-}
-
 func New(method string, pattern string, handler gin.HandlerFunc, permissions ...permissions.HandlerFunc) Route {
 	route := Route{
 		Method:  method,

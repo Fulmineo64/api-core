@@ -19,13 +19,13 @@ var provider = dbSessionProvider{}
 var no404Logger = logger.New(log.New(os.Stdout, "\r\n", log.LstdFlags), logger.Config{SlowThreshold: 200 * time.Millisecond, Colorful: true, IgnoreRecordNotFoundError: true, LogLevel: logger.Warn})
 
 type SessionModel struct {
-	Key        string `gorm:"primaryKey"`
-	ExpiresAt  time.Time
-	Properties string `gorm:"type:text"`
+	KEY        string `gorm:"primaryKey"`
+	EXPIRES_AT time.Time
+	PROPERTIES string `gorm:"type:text"`
 }
 
 func (s SessionModel) TableName() string {
-	return "sessions"
+	return "SESSIONS"
 }
 
 type Session struct {
@@ -96,16 +96,16 @@ func (sp *dbSessionProvider) retrieve(key string) *Session {
 		return nil
 	}
 	var properties map[string]interface{}
-	json.Unmarshal([]byte(session.Properties), &properties)
-	return &Session{properties, session.ExpiresAt}
+	json.Unmarshal([]byte(session.PROPERTIES), &properties)
+	return &Session{properties, session.EXPIRES_AT}
 }
 
 func (sp *dbSessionProvider) store(key string, s *Session) {
 	props, _ := json.Marshal(s.properties)
 	session := SessionModel{
-		Key:        key,
-		ExpiresAt:  s.expiresAt,
-		Properties: string(props),
+		KEY:        key,
+		EXPIRES_AT: s.expiresAt,
+		PROPERTIES: string(props),
 	}
 	DB.Session(&gorm.Session{Logger: no404Logger}).Save(session)
 }

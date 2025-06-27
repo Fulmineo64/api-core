@@ -326,6 +326,13 @@ func PrimaryFieldsToURL(primaryFields []string) string {
 	return params
 }
 
+func FullPath(controller any) string {
+	if pather, ok := controller.(interfaces.Pather); ok {
+		return pather.Path() + Endpoint(controller)
+	}
+	return Endpoint(controller)
+}
+
 func Endpoint(controller any) string {
 	if e, ok := controller.(interfaces.Endpointer); ok {
 		return "/" + e.Endpoint()

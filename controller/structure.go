@@ -254,7 +254,7 @@ func GetRelationInfo(c *gin.Context, rel *schema.Relationship, relations [][]str
 
 	ctrl := ControllerByModel[Name(typ)]
 	if ctrl != nil {
-		relationInfo.Endpoint = ctrl.Path() + Endpoint(ctrl)
+		relationInfo.Endpoint = FullPath(ctrl)
 	}
 
 	for _, tag := range gormTags {

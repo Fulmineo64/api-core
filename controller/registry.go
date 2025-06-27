@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-var ControllerByName = map[string]interfaces.Pather{}
-var ControllerByModel = map[string]interfaces.Pather{}
+var ControllerByName = map[string]any{}
+var ControllerByModel = map[string]any{}
 var ModelByName = map[string]any{}
 
 func Name(c any) string {
@@ -25,7 +25,7 @@ func RegisterModels(models ...any) {
 	}
 }
 
-func RegisterControllers(controllers ...interfaces.Pather) {
+func RegisterControllers(controllers ...any) {
 	for _, controller := range controllers {
 		ControllerByName[Name(controller)] = controller
 		if m, ok := controller.(interfaces.Modeler); ok {
@@ -34,7 +34,7 @@ func RegisterControllers(controllers ...interfaces.Pather) {
 	}
 }
 
-func RegisterModelControllers(controllers ...interfaces.PatherModeler) {
+func RegisterModelControllers(controllers ...interfaces.Modeler) {
 	for _, controller := range controllers {
 		RegisterModels(controller.Model())
 		RegisterControllers(controller)

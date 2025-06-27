@@ -27,13 +27,7 @@ type Modeler interface {
 }
 
 type Pather interface {
-	SetPath(path string)
 	Path() string
-}
-
-type PatherModeler interface {
-	Pather
-	Modeler
 }
 
 type RouterModeler interface {

@@ -22,7 +22,7 @@ func GetPathParams(c *gin.Context, model interface{}, fields []string, destinati
 
 func GetPathParamsMsg(c *gin.Context, model interface{}, fields []string, destination interface{}) message.Message {
 	dest := reflect.ValueOf(destination).Elem()
-	mdl := reflect.ValueOf(model).Elem()
+	mdl := reflect.ValueOf(model)
 	for _, field := range fields {
 		_, found := mdl.Type().FieldByName(field)
 		val := c.Param(field)

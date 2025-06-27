@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"api_core/controller"
+	"api_core/request"
 	"api_core/utils"
 
 	"github.com/gin-gonic/gin"
@@ -252,17 +253,16 @@ func GetDocs(c *gin.Context, options DocsOptions) OpenAPIV3 {
 		},
 	}
 
-	// TODO: Restore hasSessions when all routes are authenticated
-	/*hasSession := request.Session(r) != nil*/
+	hasSession := request.Session(c) != nil
 	pathParamsReg := regexp.MustCompile(`{(\w+)}`)
 
 	for _, ctrl := range controller.ControllerByName {
 		for _, route := range controller.Routes(ctrl) {
-			if /*(!hasSession ||*/ route.Authenticate(c) != nil /*)*/ {
+			if route.Permissions != nil && (!hasSession || route.Permissions(c) != nil) {
 				continue
 			}
 
-			routePath := path.Clean(controller.Endpoint(ctrl) + "/" + route.Pattern)
+			routePath := path.Clean(controller.FullPath(ctrl) + "/" + route.Pattern)
 			paramsResults := pathParamsReg.FindAllStringSubmatch(routePath, -1)
 			routePath = pathParamsReg.ReplaceAllString(routePath, "{$1}")
 
@@ -271,7 +271,7 @@ func GetDocs(c *gin.Context, options DocsOptions) OpenAPIV3 {
 				docs.Paths[routePath] = map[string]OpenAPIV3Route{}
 			}
 			currentRoute = docs.Paths[routePath]
-			mainTag := endpointToTag(controller.Endpoint(ctrl))
+			mainTag := endpointToTag(controller.FullPath(ctrl))
 			newRoute := OpenAPIV3Route{
 				Tags:       []string{mainTag},
 				Parameters: []interface{}{},
