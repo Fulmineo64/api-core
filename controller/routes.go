@@ -359,7 +359,7 @@ func Routes(controller any) []interfaces.Route {
 			addToMap(
 				interfaces.Route{
 					Method:      http.MethodGet,
-					Pattern:     "/",
+					Pattern:     "",
 					Permissions: m.PermissionsGet,
 					Handler:     GetHandler(controller, m),
 				},
@@ -394,7 +394,7 @@ func Routes(controller any) []interfaces.Route {
 			addToMap(
 				interfaces.Route{
 					Method:      http.MethodPost,
-					Pattern:     "/",
+					Pattern:     "",
 					Permissions: m.PermissionsPost,
 					Handler:     PostHandler(controller, m),
 				},
