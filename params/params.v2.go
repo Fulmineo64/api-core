@@ -50,7 +50,11 @@ func parseParamsV2(c *gin.Context, modelSchema *schema.Schema, alias string, par
 				} else {
 					conds.Nested[key] = &Conditions{Type: "N", Nested: map[string]*Conditions{}}
 				}
-				if err := parseParamsV2(c, rel.FieldSchema, "", nested, conds.Nested[key], allowed); err != nil {
+				var alias string
+				if strings.HasPrefix(strings.TrimSpace(rel.FieldSchema.Table), "(") {
+					alias = "ORIGIN"
+				}
+				if err := parseParamsV2(c, rel.FieldSchema, alias, nested, conds.Nested[key], allowed); err != nil {
 					return err
 				}
 			} else {
@@ -73,6 +77,7 @@ func parseParamsV2(c *gin.Context, modelSchema *schema.Schema, alias string, par
 					}
 				}
 			} else if len(v.Keys()) > 0 {
+				l := len(conds.Query)
 				addLogicOperator(logicOp, &(*conds).Query)
 				if strings.Contains(condtionOp, "!") {
 					conds.Query += " NOT"
@@ -81,7 +86,12 @@ func parseParamsV2(c *gin.Context, modelSchema *schema.Schema, alias string, par
 				if err := parseParamsV2(c, modelSchema, alias, &v, conds, allowed); err != nil {
 					return err
 				}
-				conds.Query += "\n)"
+				if strings.HasSuffix(conds.Query, "(\n") {
+					// Se non ho condizioni nidificate, rimuove la parentesi e l'operatore logico
+					conds.Query = conds.Query[:l]
+				} else {
+					conds.Query += "\n)"
+				}
 			}
 		} else {
 			addLogicOperator(logicOp, &(*conds).Query)

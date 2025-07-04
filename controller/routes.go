@@ -32,7 +32,7 @@ func ModelGetHandler(mdl any) gin.HandlerFunc {
 func ModelGetOneHandler(mdl any) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		primaries := map[string]interface{}{}
-		err := GetPathParams(c, mdl, utils.GetPrimaryFields(reflect.TypeOf(mdl)), &primaries)
+		err := GetPathParams(c, mdl, utils.GetPrimaryFields(reflect.TypeOf(mdl).Elem()), &primaries)
 		if request.AbortIfError(c, err) {
 			return
 		}
@@ -132,7 +132,7 @@ func ModelPatchOneHandler(mdl any) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		jsonMap := make(map[string]interface{})
 		jsonData, _ := c.GetRawData()
-		modelType := reflect.TypeOf(mdl)
+		modelType := reflect.TypeOf(mdl).Elem()
 		primaryFields := utils.GetPrimaryFields(modelType)
 
 		err := LoadModel(c, jsonData, mdl)
@@ -163,7 +163,7 @@ func ModelPatchHandler(mdl any) gin.HandlerFunc {
 		mdlSlice := reflect.New(reflect.SliceOf(reflect.TypeOf(mdl)))
 		jsonMaps := []map[string]interface{}{}
 		jsonData, _ := c.GetRawData()
-		modelType := reflect.TypeOf(mdl)
+		modelType := reflect.TypeOf(mdl).Elem()
 
 		msg := LoadModel(c, jsonData, mdlSlice)
 		if request.AbortIfError(c, msg) {
@@ -246,7 +246,7 @@ func pathParamsToModels(c *gin.Context, modelType reflect.Type, fields []string,
 
 func ModelDeleteHandler(mdl any) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		primaryFields := utils.GetPrimaryFields(reflect.TypeOf(mdl))
+		primaryFields := utils.GetPrimaryFields(reflect.TypeOf(mdl).Elem())
 		models := []interface{}{}
 		err := pathParamsToModels(c, reflect.TypeOf(mdl), primaryFields, &models)
 		if request.AbortIfError(c, err) {
@@ -321,7 +321,7 @@ func PrimaryFieldsToURL(primaryFields []string) string {
 		if i > 0 {
 			params += "/"
 		}
-		params += "{" + field + "}"
+		params += ":" + field
 	}
 	return params
 }
@@ -352,7 +352,7 @@ func Routes(controller any) []interfaces.Route {
 
 	if modeler, ok := controller.(interfaces.Modeler); ok {
 		model := modeler.Model()
-		urlPrimaryFields := PrimaryFieldsToURL(utils.GetPrimaryFields(reflect.TypeOf(model)))
+		urlPrimaryFields := PrimaryFieldsToURL(utils.GetPrimaryFields(reflect.TypeOf(model).Elem()))
 
 		if m, ok := model.(permissions.ModelWithPermissionsGet); ok {
 			permissions := m.PermissionsGet
@@ -405,7 +405,7 @@ func Routes(controller any) []interfaces.Route {
 			addToMap(
 				interfaces.Route{
 					Method:      http.MethodPatch,
-					Pattern:     "/",
+					Pattern:     "",
 					Permissions: m.PermissionsPatch,
 					Handler:     PatchHandler(controller, m),
 				},

@@ -304,7 +304,7 @@ func DefaultFileSystemPermissions(ctrl interfaces.Modeler) FileSystemPermissions
 		fsPermissions.Conditions = func(c *gin.Context) error {
 			db := c.MustGet("db").(*gorm.DB)
 			primaries := map[string]interface{}{}
-			msg := GetPathParamsMsg(c, mdl, utils.GetPrimaryFields(reflect.TypeOf(mdl)), &primaries)
+			msg := GetPathParamsMsg(c, mdl, utils.GetPrimaryFields(reflect.TypeOf(mdl).Elem()), &primaries)
 			if msg != nil {
 				return msg
 			}
