@@ -368,7 +368,7 @@ func Routes(controller any) []interfaces.Route {
 				addToMap(
 					interfaces.Route{
 						Method:      http.MethodGet,
-						Pattern:     "/" + urlPrimaryFields,
+						Pattern:     urlPrimaryFields,
 						Permissions: m.PermissionsGet,
 						Handler:     GetOneHandler(controller, m),
 					},
@@ -377,13 +377,13 @@ func Routes(controller any) []interfaces.Route {
 			addToMap(
 				interfaces.Route{
 					Method:      http.MethodGet,
-					Pattern:     "/structure",
+					Pattern:     "structure",
 					Permissions: permissions,
 					Handler:     GetStructureHandler(controller, m),
 				},
 				interfaces.Route{
 					Method:      http.MethodGet,
-					Pattern:     "/structure/{rel}",
+					Pattern:     "structure/{rel}",
 					Permissions: permissions,
 					Handler:     GetRelStructureHandler(controller, m),
 				},
@@ -411,7 +411,7 @@ func Routes(controller any) []interfaces.Route {
 				},
 				interfaces.Route{
 					Method:      http.MethodPatch,
-					Pattern:     "/" + urlPrimaryFields,
+					Pattern:     urlPrimaryFields,
 					Permissions: m.PermissionsPatch,
 					Handler:     PatchOneHandler(controller, m),
 				},
@@ -422,7 +422,7 @@ func Routes(controller any) []interfaces.Route {
 			addToMap(
 				interfaces.Route{
 					Method:      http.MethodDelete,
-					Pattern:     "/" + urlPrimaryFields,
+					Pattern:     urlPrimaryFields,
 					Permissions: m.PermissionsDelete,
 					Handler:     DeleteHandler(controller, m),
 				},
