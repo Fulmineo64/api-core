@@ -57,6 +57,14 @@ func Query(c *gin.Context, db *gorm.DB, args *QueryArgs, config QueryConfig) err
 		args.Rel = parseSel(args.Rel)
 	}
 
+	if config.Dialector == nil {
+		var err error
+		config.Dialector, err = dialectors.ByDB(db)
+		if err != nil {
+			return err
+		}
+	}
+
 	modelSchema, err := schema.Parse(args.Model, &sync.Map{}, db.NamingStrategy)
 	if err != nil {
 		return err
