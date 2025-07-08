@@ -69,7 +69,7 @@ func ModelGetRelStructureHandler(mdl any) gin.HandlerFunc {
 			return
 		}
 
-		pieces := strings.Split(c.Query("rel"), ".")
+		pieces := strings.Split(c.Param("rel"), ".")
 		relSchema := modelSchema
 		for i, piece := range pieces {
 			if rel, ok := relSchema.Relationships.Relations[piece]; ok {
@@ -383,7 +383,7 @@ func Routes(controller any) []interfaces.Route {
 				},
 				interfaces.Route{
 					Method:      http.MethodGet,
-					Pattern:     "structure/{rel}",
+					Pattern:     "structure/:rel",
 					Permissions: permissions,
 					Handler:     GetRelStructureHandler(controller, m),
 				},
