@@ -12,6 +12,8 @@ import (
 )
 
 func main() {
+	fmt.Println("🔧 Generazione index.go per i controller...")
+
 	baseDir := "controllers"
 	dirs := map[string][]string{}
 
@@ -138,6 +140,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		fmt.Println("✔", indexPath, "generato")
 	}
+
+	fmt.Println("✅ Generazione index.go per i controller completata.")
 }
