@@ -246,9 +246,10 @@ func pathParamsToModels(c *gin.Context, modelType reflect.Type, fields []string,
 
 func ModelDeleteHandler(mdl any) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		primaryFields := utils.GetPrimaryFields(reflect.TypeOf(mdl).Elem())
+		typ := reflect.TypeOf(mdl).Elem()
+		primaryFields := utils.GetPrimaryFields(typ)
 		models := []interface{}{}
-		err := pathParamsToModels(c, reflect.TypeOf(mdl), primaryFields, &models)
+		err := pathParamsToModels(c, typ, primaryFields, &models)
 		if request.AbortIfError(c, err) {
 			return
 		}
