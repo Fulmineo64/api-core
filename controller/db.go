@@ -378,7 +378,7 @@ func DeleteModels(db *gorm.DB, models interface{}) (err error) {
 		wg.Add(1)
 		go func(i int) {
 			c := request.Gin(db)
-			defer request.RecoverIfEnabled(c)
+			defer Recover(c)
 			// TODO: LoadForeignKeys should be placed here
 			res := db.Delete(val.Index(i).Addr().Interface())
 			if res.Error != nil {

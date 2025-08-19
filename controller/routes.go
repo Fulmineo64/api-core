@@ -2,7 +2,6 @@ package controller
 
 import (
 	"api_core/app"
-	"api_core/interfaces"
 	"api_core/message"
 	"api_core/permissions"
 	"api_core/query"
@@ -23,7 +22,7 @@ import (
 func ModelGetHandler(mdl any) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		err := HandleGet(c, request.DB(c), map[string]interface{}{}, mdl)
-		if request.AbortIfError(c, err) {
+		if AbortIfError(c, err) {
 			return
 		}
 	}
@@ -33,11 +32,11 @@ func ModelGetOneHandler(mdl any) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		primaries := map[string]interface{}{}
 		err := GetPathParams(c, mdl, utils.GetPrimaryFields(reflect.TypeOf(mdl).Elem()), &primaries)
-		if request.AbortIfError(c, err) {
+		if AbortIfError(c, err) {
 			return
 		}
 		err = HandleGet(c, request.DB(c), primaries, mdl)
-		if request.AbortIfError(c, err) {
+		if AbortIfError(c, err) {
 			return
 		}
 	}
@@ -100,28 +99,28 @@ func ModelPostHandler(mdl any) gin.HandlerFunc {
 		if jsonData[0] == '[' {
 			mdlSlice := reflect.New(reflect.SliceOf(reflect.TypeOf(mdl)))
 			msg := LoadModel(c, jsonData, mdlSlice)
-			if request.AbortIfError(c, msg) {
+			if AbortIfError(c, msg) {
 				return
 			}
 			msg = ValidateModels(c, mdlSlice)
-			if request.AbortIfError(c, msg) {
+			if AbortIfError(c, msg) {
 				return
 			}
 			msg = CreateToDb(c, request.DB(c), mdlSlice)
-			if request.AbortIfError(c, msg) {
+			if AbortIfError(c, msg) {
 				return
 			}
 		} else {
 			msg := LoadModel(c, jsonData, mdl)
-			if request.AbortIfError(c, msg) {
+			if AbortIfError(c, msg) {
 				return
 			}
 			msg = ValidateModel(c, mdl)
-			if request.AbortIfError(c, msg) {
+			if AbortIfError(c, msg) {
 				return
 			}
 			msg = CreateToDb(c, request.DB(c), mdl)
-			if request.AbortIfError(c, msg) {
+			if AbortIfError(c, msg) {
 				return
 			}
 		}
@@ -136,23 +135,23 @@ func ModelPatchOneHandler(mdl any) gin.HandlerFunc {
 		primaryFields := utils.GetPrimaryFields(modelType)
 
 		err := LoadModel(c, jsonData, mdl)
-		if request.AbortIfError(c, err) {
+		if AbortIfError(c, err) {
 			return
 		}
 		err = GetPathParams(c, mdl, primaryFields, mdl)
-		if request.AbortIfError(c, err) {
+		if AbortIfError(c, err) {
 			return
 		}
 		err = LoadAndValidateMap(c, jsonData, jsonMap, modelType)
-		if request.AbortIfError(c, err) {
+		if AbortIfError(c, err) {
 			return
 		}
 		err = GetPathParams(c, mdl, primaryFields, &jsonMap)
-		if request.AbortIfError(c, err) {
+		if AbortIfError(c, err) {
 			return
 		}
 		err = UpdateToDb(c, mdl, jsonMap)
-		if request.AbortIfError(c, err) {
+		if AbortIfError(c, err) {
 			return
 		}
 	}
@@ -166,15 +165,15 @@ func ModelPatchHandler(mdl any) gin.HandlerFunc {
 		modelType := reflect.TypeOf(mdl).Elem()
 
 		msg := LoadModel(c, jsonData, mdlSlice)
-		if request.AbortIfError(c, msg) {
+		if AbortIfError(c, msg) {
 			return
 		}
 		msg = LoadAndValidateMaps(c, jsonData, &jsonMaps, modelType)
-		if request.AbortIfError(c, msg) {
+		if AbortIfError(c, msg) {
 			return
 		}
 		msg = ValidateMapsPrimaries(c, jsonMaps, utils.GetPrimaryFields(modelType))
-		if request.AbortIfError(c, msg) {
+		if AbortIfError(c, msg) {
 			return
 		}
 		if len(jsonMaps) > 0 {
@@ -191,7 +190,7 @@ func ModelPatchHandler(mdl any) gin.HandlerFunc {
 			checked := map[string]struct{}{}
 			for i := range jsonMaps {
 				err := permissions.CheckModel(c, modelSliceVal.Index(i), modelSchema, checked, true)
-				if request.AbortIfError(c, err) {
+				if AbortIfError(c, err) {
 					return
 				}
 			}
@@ -250,67 +249,67 @@ func ModelDeleteHandler(mdl any) gin.HandlerFunc {
 		primaryFields := utils.GetPrimaryFields(typ)
 		models := []interface{}{}
 		err := pathParamsToModels(c, typ, primaryFields, &models)
-		if request.AbortIfError(c, err) {
+		if AbortIfError(c, err) {
 			return
 		}
 		err = DeleteFromDb(c, models)
-		if request.AbortIfError(c, err) {
+		if AbortIfError(c, err) {
 			return
 		}
 	}
 }
 
 func GetHandler(controller any, model any) gin.HandlerFunc {
-	if h, ok := controller.(interfaces.GetHandler); ok {
+	if h, ok := controller.(Getter); ok {
 		return h.Get
 	}
 	return ModelGetHandler(model)
 }
 
 func GetOneHandler(controller any, model any) gin.HandlerFunc {
-	if h, ok := controller.(interfaces.GetOneHandler); ok {
+	if h, ok := controller.(GetOner); ok {
 		return h.GetOne
 	}
 	return ModelGetOneHandler(model)
 }
 
 func GetStructureHandler(controller any, model any) gin.HandlerFunc {
-	if h, ok := controller.(interfaces.GetStructureHandler); ok {
+	if h, ok := controller.(GetStructurer); ok {
 		return h.GetStructure
 	}
 	return ModelGetStructureHandler(model)
 }
 
 func GetRelStructureHandler(controller any, model any) gin.HandlerFunc {
-	if h, ok := controller.(interfaces.GetRelStructureHandler); ok {
+	if h, ok := controller.(GetRelStructurer); ok {
 		return h.GetRelStructure
 	}
 	return ModelGetRelStructureHandler(model)
 }
 
 func PostHandler(controller any, model any) gin.HandlerFunc {
-	if h, ok := controller.(interfaces.PostHandler); ok {
+	if h, ok := controller.(Poster); ok {
 		return h.Post
 	}
 	return ModelPostHandler(model)
 }
 
 func PatchHandler(controller any, model any) gin.HandlerFunc {
-	if h, ok := controller.(interfaces.PatchHandler); ok {
+	if h, ok := controller.(PatchHandlerer); ok {
 		return h.Patch
 	}
 	return ModelPatchHandler(model)
 }
 
 func PatchOneHandler(controller any, model any) gin.HandlerFunc {
-	if h, ok := controller.(interfaces.PatchOneHandler); ok {
+	if h, ok := controller.(PatchOner); ok {
 		return h.PatchOne
 	}
 	return ModelPatchOneHandler(model)
 }
 
 func DeleteHandler(controller any, model any) gin.HandlerFunc {
-	if h, ok := controller.(interfaces.DeleteHandler); ok {
+	if h, ok := controller.(DeleteHandlerer); ok {
 		return h.Delete
 	}
 	return ModelDeleteHandler(model)
@@ -328,37 +327,37 @@ func PrimaryFieldsToURL(primaryFields []string) string {
 }
 
 func FullPath(controller any) string {
-	if pather, ok := controller.(interfaces.Pather); ok {
+	if pather, ok := controller.(Pather); ok {
 		return pather.Path() + Endpoint(controller)
 	}
 	return Endpoint(controller)
 }
 
 func Endpoint(controller any) string {
-	if e, ok := controller.(interfaces.Endpointer); ok {
+	if e, ok := controller.(Endpointer); ok {
 		return "/" + e.Endpoint()
 	}
 	return "/" + utils.FirstLower(Name(controller))
 }
 
-func Routes(controller any) []interfaces.Route {
-	routeMap := map[string]interfaces.Route{}
+func Routes(controller any) []Route {
+	routeMap := map[string]Route{}
 
-	addToMap := func(routes ...interfaces.Route) {
+	addToMap := func(routes ...Route) {
 		for _, r := range routes {
 			key := r.Method + " " + r.Pattern
 			routeMap[key] = r
 		}
 	}
 
-	if modeler, ok := controller.(interfaces.Modeler); ok {
+	if modeler, ok := controller.(Modeler); ok {
 		model := modeler.Model()
 		urlPrimaryFields := PrimaryFieldsToURL(utils.GetPrimaryFields(reflect.TypeOf(model).Elem()))
 
 		if m, ok := model.(permissions.ModelWithPermissionsGet); ok {
 			permissions := m.PermissionsGet
 			addToMap(
-				interfaces.Route{
+				Route{
 					Method:      http.MethodGet,
 					Pattern:     "",
 					Permissions: m.PermissionsGet,
@@ -367,7 +366,7 @@ func Routes(controller any) []interfaces.Route {
 			)
 			if len(urlPrimaryFields) > 0 {
 				addToMap(
-					interfaces.Route{
+					Route{
 						Method:      http.MethodGet,
 						Pattern:     urlPrimaryFields,
 						Permissions: m.PermissionsGet,
@@ -376,13 +375,13 @@ func Routes(controller any) []interfaces.Route {
 				)
 			}
 			addToMap(
-				interfaces.Route{
+				Route{
 					Method:      http.MethodGet,
 					Pattern:     "structure",
 					Permissions: permissions,
 					Handler:     GetStructureHandler(controller, m),
 				},
-				interfaces.Route{
+				Route{
 					Method:      http.MethodGet,
 					Pattern:     "structure/:rel",
 					Permissions: permissions,
@@ -393,7 +392,7 @@ func Routes(controller any) []interfaces.Route {
 
 		if m, ok := model.(permissions.ModelWithPermissionsPost); ok {
 			addToMap(
-				interfaces.Route{
+				Route{
 					Method:      http.MethodPost,
 					Pattern:     "",
 					Permissions: m.PermissionsPost,
@@ -404,13 +403,13 @@ func Routes(controller any) []interfaces.Route {
 
 		if m, ok := model.(permissions.ModelWithPermissionsPatch); ok {
 			addToMap(
-				interfaces.Route{
+				Route{
 					Method:      http.MethodPatch,
 					Pattern:     "",
 					Permissions: m.PermissionsPatch,
 					Handler:     PatchHandler(controller, m),
 				},
-				interfaces.Route{
+				Route{
 					Method:      http.MethodPatch,
 					Pattern:     urlPrimaryFields,
 					Permissions: m.PermissionsPatch,
@@ -421,7 +420,7 @@ func Routes(controller any) []interfaces.Route {
 
 		if m, ok := model.(permissions.ModelWithPermissionsDelete); ok {
 			addToMap(
-				interfaces.Route{
+				Route{
 					Method:      http.MethodDelete,
 					Pattern:     urlPrimaryFields,
 					Permissions: m.PermissionsDelete,
@@ -431,16 +430,25 @@ func Routes(controller any) []interfaces.Route {
 		}
 	}
 
-	if router, ok := controller.(interfaces.Router); ok {
+	if router, ok := controller.(Router); ok {
 		addToMap(router.Routes()...)
 	}
 
 	return slices.Collect(maps.Values(routeMap))
 }
 
-func Group(route interfaces.Route, controller any) string {
-	if grouper, ok := controller.(interfaces.Grouper); ok {
+func Group(route Route, controller any) string {
+	if grouper, ok := controller.(Grouper); ok {
 		return grouper.Group()
 	}
 	return ""
+}
+
+func PermissionsMiddleware(permissionFuncs ...permissions.HandlerFunc) func(*gin.Context) {
+	return func(c *gin.Context) {
+		err := permissions.Validate(c, permissionFuncs...)
+		if AbortIfError(c, err) {
+			return
+		}
+	}
 }

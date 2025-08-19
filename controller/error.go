@@ -1,4 +1,4 @@
-package request
+package controller
 
 import (
 	"api_core/app"
@@ -9,8 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var EnableRecover bool
-
 func AbortIfError(c *gin.Context, err error) bool {
 	if err != nil {
 		AbortWithError(c, err)
@@ -20,12 +18,6 @@ func AbortIfError(c *gin.Context, err error) bool {
 
 func AbortWithError(c *gin.Context, err error) {
 	app.Hooks.AbortWithError.Run(c, err)
-}
-
-func RecoverIfEnabled(c *gin.Context) {
-	if EnableRecover {
-		Recover(c)
-	}
 }
 
 func Recover(c *gin.Context) {

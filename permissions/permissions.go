@@ -1,7 +1,6 @@
 package permissions
 
 import (
-	"api_core/request"
 	"api_core/utils"
 
 	"github.com/gin-gonic/gin"
@@ -51,14 +50,5 @@ func Merge(permissionFunctions ...HandlerFunc) HandlerFunc {
 			}
 		}
 		return nil
-	}
-}
-
-func Middleware(permissionFuncs ...HandlerFunc) func(*gin.Context) {
-	return func(c *gin.Context) {
-		err := Validate(c, permissionFuncs...)
-		if request.AbortIfError(c, err) {
-			return
-		}
 	}
 }

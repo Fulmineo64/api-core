@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"api_core/interfaces"
 	"reflect"
 	"strings"
 )
@@ -11,7 +10,7 @@ var ControllerByModel = map[string]any{}
 var ModelByName = map[string]any{}
 
 func Name(c any) string {
-	if n, ok := c.(interfaces.Namer); ok {
+	if n, ok := c.(Namer); ok {
 		return n.Name()
 	}
 	name := reflect.TypeOf(c).String()
@@ -28,13 +27,13 @@ func RegisterModels(models ...any) {
 func RegisterControllers(controllers ...any) {
 	for _, controller := range controllers {
 		ControllerByName[Name(controller)] = controller
-		if m, ok := controller.(interfaces.Modeler); ok {
+		if m, ok := controller.(Modeler); ok {
 			ControllerByModel[Name(m.Model())] = controller
 		}
 	}
 }
 
-func RegisterModelControllers(controllers ...interfaces.Modeler) {
+func RegisterModelControllers(controllers ...Modeler) {
 	for _, controller := range controllers {
 		RegisterModels(controller.Model())
 		RegisterControllers(controller)

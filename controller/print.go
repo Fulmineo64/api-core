@@ -7,11 +7,9 @@ import (
 	"path"
 	"reflect"
 
-	"api_core/interfaces"
 	"api_core/message"
 	"api_core/model"
 	"api_core/permissions"
-	"api_core/request"
 	"api_core/utils"
 
 	"github.com/Datosystem/gofpdf"
@@ -23,7 +21,7 @@ func PrintHandler(printFunc func(*gin.Context) *gofpdf.Fpdf, fileFunc func(*gin.
 	return func(c *gin.Context) {
 		pdf := printFunc(c)
 		pdfFile := fileFunc(c)
-		if request.AbortIfError(c, pdf.Error()) {
+		if AbortIfError(c, pdf.Error()) {
 			return
 		}
 		fileBuffer := new(bytes.Buffer)
@@ -70,7 +68,7 @@ func PrintWriteHandler(printFunc func(*gin.Context) *gofpdf.Fpdf, pathFunc, file
 	return func(c *gin.Context) {
 		p := printFunc(c)
 		if p != nil {
-			if request.AbortIfError(c, p.Error()) {
+			if AbortIfError(c, p.Error()) {
 				return
 			}
 			writePdf(c, p, pathFunc(c), fileFunc(c))
@@ -80,7 +78,7 @@ func PrintWriteHandler(printFunc func(*gin.Context) *gofpdf.Fpdf, pathFunc, file
 
 func writePdf(c *gin.Context, p *gofpdf.Fpdf, folder, file string) {
 	if p.Error() != nil {
-		request.AbortWithError(c, p.Error())
+		AbortWithError(c, p.Error())
 		return
 	}
 	if _, err := os.Stat(folder); os.IsNotExist(err) {
@@ -88,18 +86,18 @@ func writePdf(c *gin.Context, p *gofpdf.Fpdf, folder, file string) {
 	}
 	err := p.OutputFileAndClose(path.Join(folder, file))
 	if err != nil {
-		request.AbortWithError(c, p.Error())
+		AbortWithError(c, p.Error())
 	}
 }
 
-func Print(pattern string, printFunc func(*gin.Context) *gofpdf.Fpdf, pathFunc, fileFunc func(*gin.Context) string, perms FileSystemPermissions) []interfaces.Route {
-	return []interfaces.Route{
+func Print(pattern string, printFunc func(*gin.Context) *gofpdf.Fpdf, pathFunc, fileFunc func(*gin.Context) string, perms FileSystemPermissions) []Route {
+	return []Route{
 		{Method: http.MethodGet, Pattern: pattern, Permissions: permissions.Merge(perms.Get, perms.Conditions), Handler: PrintReadWriteHandler(printFunc, pathFunc, fileFunc)},
 		{Method: http.MethodPost, Pattern: pattern, Permissions: permissions.Merge(perms.Post, perms.Conditions), Handler: PrintWriteHandler(printFunc, pathFunc, fileFunc)},
 	}
 }
 
-func DefaultPrintPermissions(ctrl interfaces.Modeler) FileSystemPermissions {
+func DefaultPrintPermissions(ctrl Modeler) FileSystemPermissions {
 	mdl := ctrl.Model()
 	printPermissions := FileSystemPermissions{
 		Get:  permissions.Get(mdl),
