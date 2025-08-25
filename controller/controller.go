@@ -41,6 +41,10 @@ type Pather interface {
 	Path() string
 }
 
+type Renderer interface {
+	Render(c *gin.Context)
+}
+
 type Getter interface {
 	Get(c *gin.Context)
 }

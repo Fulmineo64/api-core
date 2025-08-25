@@ -350,12 +350,56 @@ func Routes(controller any) []Route {
 		}
 	}
 
+	var model any
 	if modeler, ok := controller.(Modeler); ok {
-		model := modeler.Model()
+		model = modeler.Model()
+	}
+
+	if renderer, ok := controller.(Renderer); ok {
+		var handlerGet gin.HandlerFunc
+		if h, ok := controller.(Getter); ok {
+			handlerGet = h.Get
+		} else {
+			handlerGet = renderer.Render
+		}
+		var permissionsGet permissions.HandlerFunc
+		if model != nil {
+			if m, ok := model.(permissions.ModelWithPermissionsGet); ok {
+				permissionsGet = m.PermissionsGet
+			}
+		}
+		addToMap(
+			Route{
+				Method:      http.MethodGet,
+				Pattern:     "",
+				Permissions: permissionsGet,
+				Handler:     handlerGet,
+			},
+		)
+		var handlerPost gin.HandlerFunc
+		if h, ok := controller.(Poster); ok {
+			handlerPost = h.Post
+		} else {
+			handlerPost = renderer.Render
+		}
+		var permissionsPost permissions.HandlerFunc
+		if model != nil {
+			if m, ok := model.(permissions.ModelWithPermissionsPost); ok {
+				permissionsPost = m.PermissionsPost
+			}
+		}
+		addToMap(
+			Route{
+				Method:      http.MethodPost,
+				Pattern:     "",
+				Permissions: permissionsPost,
+				Handler:     handlerPost,
+			},
+		)
+	} else if model != nil {
 		urlPrimaryFields := PrimaryFieldsToURL(utils.GetPrimaryFields(reflect.TypeOf(model).Elem()))
 
 		if m, ok := model.(permissions.ModelWithPermissionsGet); ok {
-			permissions := m.PermissionsGet
 			addToMap(
 				Route{
 					Method:      http.MethodGet,
@@ -378,13 +422,13 @@ func Routes(controller any) []Route {
 				Route{
 					Method:      http.MethodGet,
 					Pattern:     "structure",
-					Permissions: permissions,
+					Permissions: m.PermissionsGet,
 					Handler:     GetStructureHandler(controller, m),
 				},
 				Route{
 					Method:      http.MethodGet,
 					Pattern:     "structure/:rel",
-					Permissions: permissions,
+					Permissions: m.PermissionsGet,
 					Handler:     GetRelStructureHandler(controller, m),
 				},
 			)

@@ -127,6 +127,10 @@ func processFile(path, apiKey, apiModel string) {
 		for _, t := range translated {
 			if t.ID == original.ID {
 				msgFile.Messages[i].Translation = t.Translation
+
+				if strings.TrimSpace(original.Message) != "" && strings.TrimSpace(t.Translation) != "" {
+					fmt.Printf("%s: %s => %s\n", msgFile.Language, original.Message, t.Translation)
+				}
 			}
 		}
 	}
