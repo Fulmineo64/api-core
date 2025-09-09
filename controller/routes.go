@@ -97,7 +97,7 @@ func ModelPostHandler(mdl any) gin.HandlerFunc {
 		}
 
 		if jsonData[0] == '[' {
-			mdlSlice := reflect.New(reflect.SliceOf(reflect.TypeOf(mdl)))
+			mdlSlice := reflect.New(reflect.SliceOf(reflect.TypeOf(mdl))).Interface()
 			msg := LoadModel(c, jsonData, mdlSlice)
 			if AbortIfError(c, msg) {
 				return
