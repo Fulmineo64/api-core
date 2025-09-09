@@ -351,8 +351,10 @@ func Routes(controller any) []Route {
 	}
 
 	var model any
+	var urlPrimaryFields string
 	if modeler, ok := controller.(Modeler); ok {
 		model = modeler.Model()
+		urlPrimaryFields = PrimaryFieldsToURL(utils.GetPrimaryFields(reflect.TypeOf(model).Elem()))
 	}
 
 	if renderer, ok := controller.(Renderer); ok {
@@ -362,18 +364,24 @@ func Routes(controller any) []Route {
 		} else {
 			handlerGet = renderer.Render
 		}
-		var permissionsGet permissions.HandlerFunc
-		if model != nil {
-			if m, ok := model.(permissions.ModelWithPermissionsGet); ok {
-				permissionsGet = m.PermissionsGet
-			}
-		}
+		// var permissionsGet permissions.HandlerFunc
+		// if model != nil {
+		// 	if m, ok := model.(permissions.ModelWithPermissionsGet); ok {
+		// 		permissionsGet = m.PermissionsGet
+		// 	}
+		// }
 		addToMap(
 			Route{
-				Method:      http.MethodGet,
-				Pattern:     "",
-				Permissions: permissionsGet,
-				Handler:     handlerGet,
+				Method:  http.MethodGet,
+				Pattern: "",
+				// Permissions: permissionsGet,
+				Handler: handlerGet,
+			},
+			Route{
+				Method:  http.MethodGet,
+				Pattern: urlPrimaryFields,
+				// Permissions: permissionsGet,
+				Handler: handlerGet,
 			},
 		)
 		var handlerPost gin.HandlerFunc
@@ -382,23 +390,21 @@ func Routes(controller any) []Route {
 		} else {
 			handlerPost = renderer.Render
 		}
-		var permissionsPost permissions.HandlerFunc
-		if model != nil {
-			if m, ok := model.(permissions.ModelWithPermissionsPost); ok {
-				permissionsPost = m.PermissionsPost
-			}
-		}
+		// var permissionsPost permissions.HandlerFunc
+		// if model != nil {
+		// 	if m, ok := model.(permissions.ModelWithPermissionsPost); ok {
+		// 		permissionsPost = m.PermissionsPost
+		// 	}
+		// }
 		addToMap(
 			Route{
-				Method:      http.MethodPost,
-				Pattern:     "",
-				Permissions: permissionsPost,
-				Handler:     handlerPost,
+				Method:  http.MethodPost,
+				Pattern: "",
+				// Permissions: permissionsPost,
+				Handler: handlerPost,
 			},
 		)
 	} else if model != nil {
-		urlPrimaryFields := PrimaryFieldsToURL(utils.GetPrimaryFields(reflect.TypeOf(model).Elem()))
-
 		if m, ok := model.(permissions.ModelWithPermissionsGet); ok {
 			addToMap(
 				Route{
