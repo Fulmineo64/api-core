@@ -19,8 +19,9 @@ import (
 	"gorm.io/gorm/schema"
 )
 
-func ModelGetHandler(mdl any) gin.HandlerFunc {
+func ModelGetHandler(modelGetter func() any) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		mdl := modelGetter()
 		err := HandleGet(c, request.DB(c), map[string]interface{}{}, mdl)
 		if AbortIfError(c, err) {
 			return
@@ -28,8 +29,9 @@ func ModelGetHandler(mdl any) gin.HandlerFunc {
 	}
 }
 
-func ModelGetOneHandler(mdl any) gin.HandlerFunc {
+func ModelGetOneHandler(modelGetter func() any) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		mdl := modelGetter()
 		primaries := map[string]interface{}{}
 		err := GetPathParams(c, mdl, utils.GetPrimaryFields(reflect.TypeOf(mdl).Elem()), &primaries)
 		if AbortIfError(c, err) {
@@ -42,8 +44,9 @@ func ModelGetOneHandler(mdl any) gin.HandlerFunc {
 	}
 }
 
-func ModelGetStructureHandler(mdl any) gin.HandlerFunc {
+func ModelGetStructureHandler(modelGetter func() any) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		mdl := modelGetter()
 		relations := query.GetRelations(c)
 		splittedRelations := [][]string{}
 		for _, rel := range relations {
@@ -60,8 +63,9 @@ func ModelGetStructureHandler(mdl any) gin.HandlerFunc {
 	}
 }
 
-func ModelGetRelStructureHandler(mdl any) gin.HandlerFunc {
+func ModelGetRelStructureHandler(modelGetter func() any) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		mdl := modelGetter()
 		modelSchema, err := schema.Parse(mdl, &sync.Map{}, app.DB.NamingStrategy)
 		if err != nil {
 			message.InternalServerError(c).Write(c)
@@ -87,8 +91,9 @@ func ModelGetRelStructureHandler(mdl any) gin.HandlerFunc {
 	}
 }
 
-func ModelPostHandler(mdl any) gin.HandlerFunc {
+func ModelPostHandler(modelGetter func() any) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		mdl := modelGetter()
 		jsonData, err := c.GetRawData()
 
 		if err != nil || len(jsonData) == 0 {
@@ -127,8 +132,9 @@ func ModelPostHandler(mdl any) gin.HandlerFunc {
 	}
 }
 
-func ModelPatchOneHandler(mdl any) gin.HandlerFunc {
+func ModelPatchOneHandler(modelGetter func() any) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		mdl := modelGetter()
 		jsonMap := make(map[string]interface{})
 		jsonData, _ := c.GetRawData()
 		modelType := reflect.TypeOf(mdl).Elem()
@@ -157,8 +163,9 @@ func ModelPatchOneHandler(mdl any) gin.HandlerFunc {
 	}
 }
 
-func ModelPatchHandler(mdl any) gin.HandlerFunc {
+func ModelPatchHandler(modelGetter func() any) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		mdl := modelGetter()
 		mdlSlice := reflect.New(reflect.SliceOf(reflect.TypeOf(mdl)))
 		jsonMaps := []map[string]interface{}{}
 		jsonData, _ := c.GetRawData()
@@ -243,8 +250,9 @@ func pathParamsToModels(c *gin.Context, modelType reflect.Type, fields []string,
 	return nil
 }
 
-func ModelDeleteHandler(mdl any) gin.HandlerFunc {
+func ModelDeleteHandler(modelGetter func() any) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		mdl := modelGetter()
 		typ := reflect.TypeOf(mdl).Elem()
 		primaryFields := utils.GetPrimaryFields(typ)
 		models := []interface{}{}
@@ -259,60 +267,60 @@ func ModelDeleteHandler(mdl any) gin.HandlerFunc {
 	}
 }
 
-func GetHandler(controller any, model any) gin.HandlerFunc {
+func GetHandler(controller Modeler) gin.HandlerFunc {
 	if h, ok := controller.(Getter); ok {
 		return h.Get
 	}
-	return ModelGetHandler(model)
+	return ModelGetHandler(controller.Model)
 }
 
-func GetOneHandler(controller any, model any) gin.HandlerFunc {
+func GetOneHandler(controller Modeler) gin.HandlerFunc {
 	if h, ok := controller.(GetOner); ok {
 		return h.GetOne
 	}
-	return ModelGetOneHandler(model)
+	return ModelGetOneHandler(controller.Model)
 }
 
-func GetStructureHandler(controller any, model any) gin.HandlerFunc {
+func GetStructureHandler(controller Modeler) gin.HandlerFunc {
 	if h, ok := controller.(GetStructurer); ok {
 		return h.GetStructure
 	}
-	return ModelGetStructureHandler(model)
+	return ModelGetStructureHandler(controller.Model)
 }
 
-func GetRelStructureHandler(controller any, model any) gin.HandlerFunc {
+func GetRelStructureHandler(controller Modeler) gin.HandlerFunc {
 	if h, ok := controller.(GetRelStructurer); ok {
 		return h.GetRelStructure
 	}
-	return ModelGetRelStructureHandler(model)
+	return ModelGetRelStructureHandler(controller.Model)
 }
 
-func PostHandler(controller any, model any) gin.HandlerFunc {
+func PostHandler(controller Modeler) gin.HandlerFunc {
 	if h, ok := controller.(Poster); ok {
 		return h.Post
 	}
-	return ModelPostHandler(model)
+	return ModelPostHandler(controller.Model)
 }
 
-func PatchHandler(controller any, model any) gin.HandlerFunc {
+func PatchHandler(controller Modeler) gin.HandlerFunc {
 	if h, ok := controller.(PatchHandlerer); ok {
 		return h.Patch
 	}
-	return ModelPatchHandler(model)
+	return ModelPatchHandler(controller.Model)
 }
 
-func PatchOneHandler(controller any, model any) gin.HandlerFunc {
+func PatchOneHandler(controller Modeler) gin.HandlerFunc {
 	if h, ok := controller.(PatchOner); ok {
 		return h.PatchOne
 	}
-	return ModelPatchOneHandler(model)
+	return ModelPatchOneHandler(controller.Model)
 }
 
-func DeleteHandler(controller any, model any) gin.HandlerFunc {
+func DeleteHandler(controller Modeler) gin.HandlerFunc {
 	if h, ok := controller.(DeleteHandlerer); ok {
 		return h.Delete
 	}
-	return ModelDeleteHandler(model)
+	return ModelDeleteHandler(controller.Model)
 }
 
 func PrimaryFieldsToURL(primaryFields []string) string {
@@ -404,14 +412,14 @@ func Routes(controller any) []Route {
 				Handler: handlerPost,
 			},
 		)
-	} else if model != nil {
+	} else if modeler, ok := controller.(Modeler); ok {
 		if m, ok := model.(permissions.ModelWithPermissionsGet); ok {
 			addToMap(
 				Route{
 					Method:      http.MethodGet,
 					Pattern:     "",
 					Permissions: m.PermissionsGet,
-					Handler:     GetHandler(controller, m),
+					Handler:     GetHandler(modeler),
 				},
 			)
 			if len(urlPrimaryFields) > 0 {
@@ -420,7 +428,7 @@ func Routes(controller any) []Route {
 						Method:      http.MethodGet,
 						Pattern:     urlPrimaryFields,
 						Permissions: m.PermissionsGet,
-						Handler:     GetOneHandler(controller, m),
+						Handler:     GetOneHandler(modeler),
 					},
 				)
 			}
@@ -429,13 +437,13 @@ func Routes(controller any) []Route {
 					Method:      http.MethodGet,
 					Pattern:     "structure",
 					Permissions: m.PermissionsGet,
-					Handler:     GetStructureHandler(controller, m),
+					Handler:     GetStructureHandler(modeler),
 				},
 				Route{
 					Method:      http.MethodGet,
 					Pattern:     "structure/:rel",
 					Permissions: m.PermissionsGet,
-					Handler:     GetRelStructureHandler(controller, m),
+					Handler:     GetRelStructureHandler(modeler),
 				},
 			)
 		}
@@ -446,7 +454,7 @@ func Routes(controller any) []Route {
 					Method:      http.MethodPost,
 					Pattern:     "",
 					Permissions: m.PermissionsPost,
-					Handler:     PostHandler(controller, m),
+					Handler:     PostHandler(modeler),
 				},
 			)
 		}
@@ -457,13 +465,13 @@ func Routes(controller any) []Route {
 					Method:      http.MethodPatch,
 					Pattern:     "",
 					Permissions: m.PermissionsPatch,
-					Handler:     PatchHandler(controller, m),
+					Handler:     PatchHandler(modeler),
 				},
 				Route{
 					Method:      http.MethodPatch,
 					Pattern:     urlPrimaryFields,
 					Permissions: m.PermissionsPatch,
-					Handler:     PatchOneHandler(controller, m),
+					Handler:     PatchOneHandler(modeler),
 				},
 			)
 		}
@@ -474,7 +482,7 @@ func Routes(controller any) []Route {
 					Method:      http.MethodDelete,
 					Pattern:     urlPrimaryFields,
 					Permissions: m.PermissionsDelete,
-					Handler:     DeleteHandler(controller, m),
+					Handler:     DeleteHandler(modeler),
 				},
 			)
 		}
