@@ -166,7 +166,7 @@ func ModelPatchOneHandler(modelGetter func() any) gin.HandlerFunc {
 func ModelPatchHandler(modelGetter func() any) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		mdl := modelGetter()
-		mdlSlice := reflect.New(reflect.SliceOf(reflect.TypeOf(mdl)))
+		mdlSlice := reflect.New(reflect.SliceOf(reflect.TypeOf(mdl))).Interface()
 		jsonMaps := []map[string]interface{}{}
 		jsonData, _ := c.GetRawData()
 		modelType := reflect.TypeOf(mdl).Elem()
