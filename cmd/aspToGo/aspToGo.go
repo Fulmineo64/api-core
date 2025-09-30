@@ -7,25 +7,12 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 
 	"golang.org/x/net/html"
 )
-
-/*
-# Prompt
-
-Traduci il seguente codice ASP in Go templ, seguendo le seguenti indicazioni:
-- rimpiazza <div class="row"> con @Row, se vi sono altre classi oltre a "row" esempio <div class="row row-spaced align-items-center"> diventa @Row(Class("row-spaced align-items-center"){...}
-- rimpiazza i <div class="col..."> con @Col riportando le classi senza "col-" davanti esempio <div class="col-6 col-md-3 col-xxl"> con @Col("6 md-3 xxl"){...}
-- rimpiazza <label> e <input> con @FieldInput(label, field string, attrs ...Attrs) dove gli input hanno l'attributo ng-model che inizia con $ctrl.model, metti il contenuto della label nel primo parametro, il campo (ovvero la parte dopo $ctrl.model. in ng-model) nel secondo parametro e i restanti attributi in Attrs{} nel 3° parametro che puoi usare come una map[string]any
-- rimpiazza lang("stringa") con Lang(c, "stringa")
-- rimpiazza <% if ... then %> e <% end if %> con if ... { ... }
-- rimpiazza Permissions.has(...) e Permissions.hasOne(...) con s.Has(...) e s.HasOne(...)
-- rimpiazza Application("FLAG_...") con app.Flags.Has("...") senza FLAG_ davanti, se Application("...") non inizia con FLAG_ rimpiazzala invece con la map[string]string app.Properties["..."]
-- al posto di <%= %> per scrivere i valori usa { }
-*/
 
 func main() {
 	inPath := flag.String("in", "", "input file (default stdin)")
@@ -48,8 +35,11 @@ func main() {
 		defer f.Close()
 
 		_, file := path.Split(*inPath)
-		pageName = strings.TrimSuffix(file, ".asp")
-		parts := strings.Split(pageName, "_")
+
+		extIndex := strings.LastIndex(file, ".")
+		pageName = file[:extIndex]
+		re := regexp.MustCompile(`[\.\-_]+`)
+		parts := re.Split(pageName, -1)
 		for i := 1; i < len(parts); i++ {
 			if len(parts[i]) > 0 {
 				runes := []rune(parts[i])
@@ -66,22 +56,24 @@ func main() {
 		exitErr("errore in lettura", err)
 	}
 
-	re := regexp.MustCompile(`(<%=\s*)(.*?)(\s*%>)`)
-	inStr := re.ReplaceAllStringFunc(string(inBytes), func(m string) string {
-		parts := re.FindStringSubmatch(m)
-		return parts[1] + strings.ReplaceAll(parts[2], `"`, "`") + parts[3]
-	})
-
-	tokenizer := html.NewTokenizer(strings.NewReader(inStr))
-	if err != nil {
-		exitErr("errore in parsing HTML", err)
-	}
+	templBody := NewTransformer().Transform(string(inBytes))
 
 	var out string
 	out = "package pages\n\n"
-	out += "templ " + pageName + "() {\n"
+	out += "import ("
+	out += "\n\t\"api_core/request\""
+	// out += "\n\t\"clima_api/controllers\""
+	out += "\n\t. \"clima_api/views/html/components\""
+	out += "\n\t\"github.com/gin-gonic/gin\""
+	out += "\n\t\"clima_api/controllers\""
 
-	out += NewTransformer().Transform(tokenizer)
+	if regexp.MustCompile(`{.*html\..*}`).MatchString(templBody) {
+		out += "\n\t\"html\""
+	}
+	out += "\n)\n\n"
+	out += "templ " + pageName + "() {\n"
+	out += templBody
+	out += "}"
 
 	if *outPath == "" {
 		fmt.Print(out)
@@ -97,6 +89,72 @@ func main() {
 func exitErr(msg string, err error) {
 	fmt.Fprintln(os.Stderr, "❌ "+msg+":", err)
 	os.Exit(2)
+}
+
+// Attrs
+
+func parseAttr(val string) string {
+	val = replaceKeywords(val)
+	if !strings.HasPrefix(val, "{") && !strings.HasSuffix(val, "}") {
+		val = `"` + val + `"`
+	}
+	return val
+}
+
+func templAttrs(attrs []html.Attribute) string {
+	if len(attrs) == 0 {
+		return ""
+	}
+	result := []string{}
+	for _, a := range attrs {
+		if a.Val == "" {
+			result = append(result, "`"+a.Key+"`: true")
+		} else {
+			result = append(result, "`"+a.Key+"`: `"+replaceKeywords(a.Val)+"`")
+		}
+	}
+	return "Attrs{" + strings.Join(result, ", ") + "}"
+}
+
+// Keywords
+
+func replaceKeywords(val string) string {
+	val = replaceASPKeywords(val)
+	val = replaceAngularKeywords(val)
+	return val
+}
+
+func replaceASPKeywords(val string) string {
+	// if
+	val = regexp.MustCompile(`(?i)<%\s*if\s+(.*)\sthen\s*%>(.*)<%\s*end if\s*%>`).ReplaceAllString(val, "if $1 { $2 }")
+	val = regexp.MustCompile(`(?i)<%\s*if\s+(.*)\sthen\s*%>`).ReplaceAllString(val, "if $1 {")
+	val = regexp.MustCompile(`(?i)<%\s*end\s+if\s*%>`).ReplaceAllString(val, "}")
+	// operators
+	val = regexp.MustCompile(`(?i) and `).ReplaceAllString(val, " && ")
+	val = regexp.MustCompile(`(?i) or `).ReplaceAllString(val, " || ")
+	val = regexp.MustCompile(`(?i) not `).ReplaceAllString(val, " !")
+	// array
+	val = regexp.MustCompile(`(?i)array\((.*?)\)`).ReplaceAllString(val, "$1")
+	// functions and keywords
+	val = regexp.MustCompile(`(?i)writeApplication\("FLAG_([\w_]*?)"\)`).ReplaceAllString(val, "app.Flags.Has(`$1`)")
+	val = regexp.MustCompile(`(?i)Application\("FLAG_([\w_]*?)"\)`).ReplaceAllString(val, "app.Flags.Has(`$1`)")
+	val = regexp.MustCompile(`(?i)writeApplication\("(.*?)"\)`).ReplaceAllString(val, "app.Properties[`$1`]")
+	val = regexp.MustCompile(`(?i)Application\("(.*?)"\)`).ReplaceAllString(val, "app.Properties[`$1`]")
+	val = regexp.MustCompile(`(?i)Server.HTMLEncode\(`).ReplaceAllString(val, "html.EscapeString(")
+	val = regexp.MustCompile(`(?i)Session\("(.*?)"\)`).ReplaceAllString(val, "s.GetString(`$1`)")
+
+	val = regexp.MustCompile(`(?i)Request\(`).ReplaceAllString(val, "c.Query(")
+	val = regexp.MustCompile(`(?i)Permissions.has\(`).ReplaceAllString(val, "s.Has(")
+	val = regexp.MustCompile(`lang\(`).ReplaceAllString(val, "Lang(c,")
+	// tags
+	val = strings.ReplaceAll(val, "<%=", "{")
+	val = strings.ReplaceAll(val, "%>", "}")
+	return val
+}
+
+func replaceAngularKeywords(val string) string {
+	val = regexp.MustCompile(`{{(.*?)}}`).ReplaceAllString(val, "@W(`$1`)")
+	return val
 }
 
 var voidElements = map[string]struct{}{
@@ -118,16 +176,14 @@ var voidElements = map[string]struct{}{
 
 func NewTransformer() *Transformer {
 	return &Transformer{
-		reLang: regexp.MustCompile(`<%=?\s*lang\((?:"|')(.*?)(?:"|')\)\s*%>`),
-		reApp:  regexp.MustCompile(`Application\((?:"|')(.*?)(?:"|')\)`),
+		replace: map[string][]string{},
 	}
 }
 
 type Transformer struct {
-	reLang      *regexp.Regexp
-	reApp       *regexp.Regexp
 	indentLevel int
 	b           strings.Builder
+	replace     map[string][]string
 }
 
 func (t *Transformer) add(str string) *Transformer {
@@ -146,35 +202,107 @@ func (t *Transformer) ln() *Transformer {
 	return t
 }
 
-func (t *Transformer) Transform(z *html.Tokenizer) string {
+func (t *Transformer) Transform(in string) string {
+	var mainSection bool
+	var controller, tipo string
+	// Sposta tutto il contenuto prima di div class container dentro di esso
+	re := regexp.MustCompile(`(?sm)(.*)<!--#include file="header.asp"-->(.*?)(<div class="container.*?".*?ng-app.*?>)`)
+	in = re.ReplaceAllString(in, "$1@Head()$3$2")
+	// Rimuove gli import ASP già gestiti
+	re = regexp.MustCompile(`\s*<!--\s*#include file=".*?(util\/Permissions.asp|secure.asp)"-->`)
+	in = re.ReplaceAllString(in, "")
+	// Individua se la pagina è un elenco o una scheda
+	re = regexp.MustCompile(`\s*<script type="module" src="(.*?)"></script>`)
+	in = re.ReplaceAllStringFunc(in, func(m string) string {
+		parts := re.FindStringSubmatch(m)
+		re = regexp.MustCompile(`js\/app-(.*)-(scheda|elenco)\.js.*`)
+		controller = re.ReplaceAllString(parts[1], "$1")
+		controller = strings.ToUpper(controller[0:1]) + controller[1:]
+		if strings.Contains(parts[1], "-elenco.js") {
+			tipo = "Elenco"
+		} else {
+			tipo = "Scheda"
+		}
+		return ""
+	})
+	// Trasforma gli script in import AngularApp
+	scripts := []string{}
+	re = regexp.MustCompile(`\s*<script (type="text\/javascript" |)src="[\.\/]*(.*?)(\?v=.*|)">\s*<\/script>`)
+	in = re.ReplaceAllStringFunc(in, func(m string) string {
+		parts := re.FindStringSubmatch(m)
+		scripts = append(scripts, parts[2])
+		return ""
+	})
+	// Rimpiazza " nei segmenti ASP inlinea con `
+	re = regexp.MustCompile(`(\s*<\w+.*?)("*<%\s*.*\s*%>"*)((.*?)>)`)
+	in = re.ReplaceAllStringFunc(in, func(m string) string {
+		parts := re.FindStringSubmatch(m)
+		if strings.HasPrefix(parts[2], `"`) && strings.HasSuffix(parts[2], `"`) {
+			parts[2] = parts[2][1 : len(parts[2])-1]
+		}
+		reAsp := regexp.MustCompile(`<%\s*.*?\s*%>`)
+		parts[2] = reAsp.ReplaceAllStringFunc(parts[2], func(m string) string {
+			parts := reAsp.FindStringSubmatch(m)
+			return strings.ReplaceAll(replaceKeywords(parts[0]), `"`, "`")
+		})
+		result := parts[1] + parts[2] + parts[3]
+		return result
+	})
+
+	// Parsing start
+	z := html.NewTokenizer(strings.NewReader(in))
+	t.indentLevel++
+	t.indent().add("{{").ln()
+	t.indentLevel++
+	t.indent().add("c := ctx.Value(GinKey).(*gin.Context)").ln()
+	t.indent().add("s := request.Session(c)").ln()
+	if controller != "" {
+		t.indent().add("a := NewAngularApp(controllers." + controller + "{})").ln()
+		for _, script := range scripts {
+			t.indent().add(`a.Scripts.Add("` + script + `")`).ln()
+		}
+	}
+	t.indentLevel--
+	t.indent().add("}}").ln()
 	var prev html.TokenType
 	for {
 		tt := z.Next()
+		if tt == html.ErrorToken {
+			return t.finalize(t.b.String())
+		}
+		raw := strings.TrimSpace(string(z.Raw()))
 		switch tt {
-		case html.ErrorToken:
-			return t.b.String()
 		case html.StartTagToken, html.SelfClosingTagToken:
 			if prev == html.StartTagToken {
 				t.ln()
 			}
 			tagName, hasAttr := z.TagName()
 			tag := string(tagName)
-			raw := string(z.Raw())
 
-			var class string
-			var attrs []html.Attribute
+			attrs := map[string]string{}
 			for hasAttr {
 				k, v, more := z.TagAttr()
-				attrs = append(attrs, html.Attribute{Key: string(k), Val: string(v)})
-				if string(k) == "class" {
-					class = string(v)
-				}
+				attrs[string(k)] = string(v)
 				hasAttr = more
 			}
 
 			switch {
-			case tag == "div" && strings.Contains(class, "row"):
-				classes := strings.Fields(class)
+			// Trasformazione di div class="container" e ng-app in @Scheda o Elenco
+			case tag == "div" && strings.Contains(attrs["class"], "container") && attrs["ng-app"] != "":
+				t.indent().add(`@` + tipo + `(a, "` + strings.TrimSpace(strings.ReplaceAll(attrs["class"], "container", "")) + `") {`)
+				t.replaceNext("div", t.indentLevel, "}")
+			// Rimuove la form base all'inizio della pagina
+			case tag == "form" && strings.Contains(attrs["name"], "form1"):
+				tt = html.SelfClosingTagToken
+				t.replaceNext("form", t.indentLevel-1, "")
+			// Rimuove la section base all'inizio della pagina
+			case attrs["class"] == "section" && !mainSection:
+				mainSection = true
+				tt = html.SelfClosingTagToken
+				t.replaceNext(tag, t.indentLevel-1, "")
+			// Trasformazione di div in @Row
+			case tag == "div" && strings.Contains(attrs["class"], "row"):
+				classes := strings.Fields(attrs["class"])
 				extra := []string{}
 				for _, c := range classes {
 					if c != "row" {
@@ -182,17 +310,18 @@ func (t *Transformer) Transform(z *html.Tokenizer) string {
 					}
 				}
 				if len(extra) != len(classes) {
-					t.indent().add(`@Row(`)
+					t.indent().add("@Row(")
 					if len(extra) > 0 {
-						t.add(`Class("` + strings.Join(extra, " ") + `")`)
+						t.add("Class(`" + strings.Join(extra, " ") + "`)")
 					}
-					t.add(`) {`).ln()
-					// t.indent().add("}")
+					t.add(`) {`)
+					t.replaceNext("div", t.indentLevel, "}")
 				}
-			case tag == "div" && strings.Contains(class, "col-"):
+			// Trasformazione di div in @Col
+			case tag == "div" && strings.Contains(attrs["class"], "col-"):
 				colSizes := []string{}
 				extra := []string{}
-				classes := strings.Fields(class)
+				classes := strings.Fields(attrs["class"])
 				for _, class := range classes {
 					if strings.HasPrefix(class, "col-") {
 						colSizes = append(colSizes, strings.TrimPrefix(class, "col-"))
@@ -200,141 +329,165 @@ func (t *Transformer) Transform(z *html.Tokenizer) string {
 						extra = append(extra, class)
 					}
 				}
-				t.indent().add(`@Col("` + strings.Join(colSizes, " ") + `"`)
+				t.indent().add("@Col(`" + strings.Join(colSizes, " ") + "`")
 				if len(extra) > 0 {
-					t.add(`, Class("` + strings.Join(extra, " ") + `")`)
+					t.add(", Class(`" + strings.Join(extra, " ") + "`)")
 				}
-				t.add(`) {`).ln()
-				// t.indent().add("}").ln()
-			case tag == "label":
-				// Expects a text content and an input inside the label
-				// var text string
-				// var input *html.Node
-				// var count int
-				// for c := n.FirstChild; c != nil; c = c.NextSibling {
-				// 	if c.Type == html.TextNode {
-				// 		text = c.Data
-				// 	} else if c.Type == html.ElementNode && c.Data == "input" {
-				// 		input = c
-				// 	}
-				// 	count++
-				// }
-				// if count == 2 && text != "" && input != nil {
-				// 	var field string
-				// 	var attrs []html.Attribute
-				// 	for _, a := range input.Attr {
-				// 		if a.Key == "ng-model" {
-				// 			field = strings.TrimPrefix(t.parseAttr(a.Val), "$ctrl.model.")
-				// 		} else {
-				// 			attrs = append(attrs, a)
-				// 		}
-				// 	}
-				// 	if field == "" {
-				// 		t.renderPlain(input)
-				// 		return
-				// 	}
-				// 	t.indent().add(fmt.Sprintf(`@FieldInput(%s, "%s", %s)`, t.parseAttr(text), field, t.renderTemplAttrs(attrs)))
-				// 	return
-				// } else {
-				// 	t.renderPlain(n)
-				// 	return
-				// }
+				t.add(`) {`)
+				t.replaceNext("div", t.indentLevel, "}")
 			default:
-				if t.hasASPCodeTag(raw) {
-					t.indent().add(raw)
-				} else {
-					t.indent().add("<" + tag + t.Attrs(attrs) + ">")
+				aspBeginIndex := strings.Index(raw, "<%")
+				for aspBeginIndex != -1 {
+					aspEndIndex := strings.Index(raw, "%>") + 2
+					// TODO: Parte obsoleta dopo initialize, da sistemare
+					if aspBeginIndex >= 2 && raw[aspBeginIndex-2:aspBeginIndex] == `="` {
+						raw = raw[:aspBeginIndex-1] + parseAttr(raw[aspBeginIndex:aspEndIndex]) + raw[aspEndIndex+1:]
+					} else {
+						raw = raw[:aspBeginIndex] + replaceKeywords(raw[aspBeginIndex:aspEndIndex]) + raw[aspEndIndex:]
+					}
+					newBeginIndex := strings.Index(raw, "<%")
+					if newBeginIndex == aspBeginIndex {
+						panic("Errore nel parsing di " + string(z.Raw()))
+					}
+					aspBeginIndex = newBeginIndex
 				}
+				t.indent().add(raw)
 			}
 			if tt != html.SelfClosingTagToken {
-				if _, ok := voidElements[tag]; !ok {
+				if _, ok := voidElements[tag]; ok {
+					t.ln()
+					tt = html.SelfClosingTagToken
+				} else {
 					t.indentLevel++
 				}
 			}
-
 		case html.EndTagToken:
-			raw := string(z.Raw())
 			t.indentLevel--
-			t.indent().add(raw).ln()
+			if t.indentLevel < 0 {
+				t.indentLevel = 0
+			}
 
+			tagName, _ := z.TagName()
+			key := fmt.Sprintf("%s:%v", string(tagName), t.indentLevel)
+			if replacements, ok := t.replace[key]; ok && len(replacements) > 0 {
+				replacement := replacements[0]
+				if replacement == "" {
+					t.indentLevel++
+				} else {
+					if prev != html.StartTagToken {
+						t.indent()
+					}
+					t.add(replacement).ln()
+				}
+				t.replace[key] = replacements[1:]
+			} else {
+				if prev != html.StartTagToken {
+					t.indent()
+				}
+				t.add(raw).ln()
+			}
 		case html.TextToken:
 			if prev == html.StartTagToken {
 				t.ln()
 			}
-			raw := strings.TrimSpace(string(z.Raw()))
-			if strings.Contains(raw, "<%") {
-				lines := strings.Split(raw, "\n")
-				for _, line := range lines {
-					t.indent().add(line).ln()
+			// Sostituzione keywords ASP e Angular
+			if raw != "" {
+				if strings.Contains(raw, "<%") {
+					lines := strings.Split(raw, "\n")
+					for _, line := range lines {
+						if strings.Contains(line, "<%") && strings.Contains(line, "%>") {
+							// Se la riga inizia e finisce con una tag ASP tento di convertirla automaticamente
+							text := replaceKeywords(strings.TrimSpace(line))
+							if !strings.Contains(text, "{") && strings.HasSuffix(text, "}") {
+								t.indentLevel--
+							}
+							t.indent().add(text).ln()
+							if strings.HasSuffix(text, "{") {
+								t.indentLevel++
+							}
+						} else {
+							t.add(line).ln()
+						}
+					}
+				} else {
+					t.indent().add(replaceAngularKeywords(raw)).ln()
 				}
-			} else if raw != "" {
-				t.indent().add(t.parseAttr(raw)).ln()
 			}
-
 		case html.CommentToken:
 			if prev == html.StartTagToken {
 				t.ln()
 			}
-			t.indent().add(string(z.Raw())).ln()
+			t.indent().add(raw).ln()
 		}
 		prev = tt
 	}
 }
 
-func (t *Transformer) hasASPCodeTag(s string) bool {
-	re := regexp.MustCompile(`<%`)
-	matches := re.FindAllStringIndex(s, -1)
-	for _, m := range matches {
-		// controlla se subito dopo c'è un '='
-		if m[1] < len(s) && s[m[1]] != '=' {
-			return true
-		}
-	}
-	return false
-}
+func (t *Transformer) finalize(text string) string {
+	textLabelRegex := `(?m)(\s*)<label class="form-control-label">\s*(.[^<>]+?)\s*<\/label>`
+	// Rimpiazza le <label class="form-control-label"> contenenti solo testo seguite subito da un input con @FieldInput
+	re := regexp.MustCompile(textLabelRegex + `\s*(<input.*?>)`)
+	text = re.ReplaceAllStringFunc(text, func(m string) string {
+		parts := re.FindStringSubmatch(m)
+		doc, err := html.Parse(strings.NewReader(parts[3]))
+		if err == nil {
+			var model string
+			input := doc.FirstChild.LastChild.FirstChild
+			for i := len(input.Attr) - 1; i >= 0; i-- {
+				switch input.Attr[i].Key {
+				case "class":
+					input.Attr[i].Val = strings.ReplaceAll(strings.ReplaceAll(input.Attr[i].Val, "form-check-input", ""), "form-control", "")
+					if strings.TrimSpace(input.Attr[i].Val) == "" {
+						input.Attr = slices.Delete(input.Attr, i, i+1)
+					}
+				case "ng-model":
+					model = input.Attr[i].Val
+					input.Attr = slices.Delete(input.Attr, i, i+1)
+				case "ng-maxlength", "type":
+					input.Attr = slices.Delete(input.Attr, i, i+1)
+				}
+			}
 
-func (t *Transformer) parseAttr(val string) string {
-	val = strings.ReplaceAll(val, "<%=", "{")
-	val = strings.ReplaceAll(val, "%>", "}")
-	val = strings.ReplaceAll(val, "writeApplication(`FLAG_", "app.Flags.Has(`")
-	val = strings.ReplaceAll(val, "Application(`FLAG_", "app.Flags.Has(`")
-	val = regexp.MustCompile("Application\\(`(.*)`\\)").ReplaceAllString(val, "app.Properties[`$1`]")
-	val = strings.ReplaceAll(val, "Request(`", "c.Query(`")
-	val = strings.ReplaceAll(val, "Application(`", "app.Properties[`")
-	val = strings.ReplaceAll(val, "lang(", "Lang(c,")
-	if !strings.HasPrefix(val, "{") && !strings.HasSuffix(val, "}") {
-		val = `"` + val + `"`
-	}
-	return val
-}
-
-func (t *Transformer) Attrs(attrs []html.Attribute) string {
-	var b strings.Builder
-	for _, attr := range attrs {
-		b.WriteString(" ")
-		if attr.Val == "" {
-			b.WriteString(attr.Key)
+			label := parts[2]
+			if !strings.Contains(label, "Lang") {
+				label = "Lang(c,`" + label + "`)"
+			}
+			if strings.HasPrefix(model, "$ctrl.model.") {
+				field := strings.TrimPrefix(model, "$ctrl.model.")
+				result := parts[1] + "@FieldInput(" + label + ", `" + field + "`"
+				if len(input.Attr) > 0 {
+					result += `, ` + templAttrs(input.Attr)
+				}
+				result += `)`
+				return result
+			}
 		} else {
-			b.WriteString(attr.Key + "=" + t.parseAttr(attr.Val))
+			fmt.Println(parts[0], err)
 		}
-	}
-	return b.String()
+		return parts[0]
+	})
+
+	// Rimpiazza le <label class="form-control-label"> contenenti solo testo con @Label
+	re = regexp.MustCompile(textLabelRegex)
+	text = re.ReplaceAllStringFunc(text, func(m string) string {
+		parts := re.FindStringSubmatch(m)
+		content := strings.TrimSpace(parts[2])
+		if !strings.Contains(content, "Lang") {
+			content = "Lang(c,`" + content + "`)"
+		}
+		if !strings.HasPrefix(content, "{") && !strings.HasSuffix(content, "}") {
+			content = "{" + content + "}"
+		}
+		return parts[1] + `@Label(){ ` + content + ` }`
+	})
+	return text
 }
 
-func (t *Transformer) TemplAttrs(attrs []html.Attribute) string {
-	if len(attrs) == 0 {
-		return "Attrs{}"
+func (t *Transformer) replaceNext(tag string, at int, with string) {
+	key := fmt.Sprintf("%s:%v", tag, at)
+	if replacements, ok := t.replace[key]; ok {
+		t.replace[key] = append([]string{with}, replacements...)
+	} else {
+		t.replace[key] = []string{with}
 	}
-	var b strings.Builder
-	b.WriteString("Attrs{\n")
-	for _, a := range attrs {
-		val := t.parseAttr(a.Val)
-		if val == "" {
-			fmt.Fprintf(&b, "\t%q: true,\n", a.Key)
-		} else {
-			fmt.Fprintf(&b, "\t%q: %q,\n", a.Key, val)
-		}
-	}
-	b.WriteString("}")
-	return b.String()
 }

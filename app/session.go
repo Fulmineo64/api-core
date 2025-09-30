@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -35,6 +36,10 @@ type Session struct {
 
 func (s *Session) Get(key string) interface{} {
 	return s.properties[key]
+}
+
+func (s *Session) GetString(key string) string {
+	return fmt.Sprintf("%v", s.properties[key])
 }
 
 func (s *Session) Set(key string, value interface{}) {
