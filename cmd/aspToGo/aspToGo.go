@@ -15,55 +15,58 @@ import (
 )
 
 func main() {
-	inPath := flag.String("in", "", "input file (default stdin)")
-	outPath := flag.String("out", "", "output file (default stdout)")
+	inPath := flag.String("in", "", "input file (obbligatorio)")
+	outPath := flag.String("out", "", "output file (obbligatorio)")
 	flag.Parse()
 
-	pageName := "Parsed"
-
-	// sorgente input
-	var r io.Reader
-	if *inPath == "" {
-		fmt.Println("🔧 Parsing da ASP a Go di stdin")
-		r = os.Stdin
-	} else {
-		fmt.Println("🔧 Parsing da ASP a Go di " + *inPath)
-		f, err := os.Open(*inPath)
-		if err != nil {
-			exitErr("errore in apertura input", err)
-		}
-		defer f.Close()
-
-		_, file := path.Split(*inPath)
-
-		extIndex := strings.LastIndex(file, ".")
-		pageName = file[:extIndex]
-		re := regexp.MustCompile(`[\.\-_]+`)
-		parts := re.Split(pageName, -1)
-		for i := 1; i < len(parts); i++ {
-			if len(parts[i]) > 0 {
-				runes := []rune(parts[i])
-				runes[0] = unicode.ToUpper(runes[0])
-				parts[i] = string(runes)
-			}
-		}
-		pageName = strings.Join(parts, "")
-		r = f
+	if *inPath == "" || *outPath == "" {
+		fmt.Println("❌ Devi specificare sia -in che -out")
+		os.Exit(1)
 	}
 
-	inBytes, err := io.ReadAll(r)
+	// pageName ricavato dal file di input
+	pageName := "Parsed"
+	fmt.Println("🔧 Parsing da ASP a Go di " + *inPath)
+
+	f, err := os.Open(*inPath)
+	if err != nil {
+		exitErr("errore in apertura input", err)
+	}
+	defer f.Close()
+
+	_, file := path.Split(*inPath)
+	extIndex := strings.LastIndex(file, ".")
+	pageName = file[:extIndex]
+	re := regexp.MustCompile(`[\.\-_]+`)
+	parts := re.Split(pageName, -1)
+	for i := 1; i < len(parts); i++ {
+		if len(parts[i]) > 0 {
+			runes := []rune(parts[i])
+			runes[0] = unicode.ToUpper(runes[0])
+			parts[i] = string(runes)
+		}
+	}
+	pageName = strings.Join(parts, "")
+
+	inBytes, err := io.ReadAll(f)
 	if err != nil {
 		exitErr("errore in lettura", err)
 	}
 
 	templBody := NewTransformer().Transform(string(inBytes))
 
+	// prendi nome package dall'ultima cartella dell'outPath
+	outDir := path.Dir(*outPath)
+	_, pkg := path.Split(outDir)
+	if pkg == "" {
+		pkg = "main" // fallback se non riesce
+	}
+
 	var out string
-	out = "package pages\n\n"
+	out = "package " + pkg + "\n\n"
 	out += "import ("
 	out += "\n\t\"api_core/request\""
-	// out += "\n\t\"clima_api/controllers\""
-	out += "\n\t. \"clima_api/views/html/components\""
+	out += "\n\t. \"clima_api/views/html/common\""
 	out += "\n\t\"github.com/gin-gonic/gin\""
 	out += "\n\t\"clima_api/controllers\""
 
@@ -75,15 +78,10 @@ func main() {
 	out += templBody
 	out += "}"
 
-	if *outPath == "" {
-		fmt.Print(out)
-	} else {
-		if err := os.WriteFile(*outPath, []byte(out), 0644); err != nil {
-			exitErr("errore in scrittura", err)
-		}
-		fmt.Println("✅ output in " + *outPath)
+	if err := os.WriteFile(*outPath, []byte(out), 0644); err != nil {
+		exitErr("errore in scrittura", err)
 	}
-
+	fmt.Println("✅ output in " + *outPath)
 }
 
 func exitErr(msg string, err error) {

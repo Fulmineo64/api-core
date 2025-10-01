@@ -11,8 +11,8 @@
             "mode": "auto",
             "program": "cmd/aspToGo",
             "args": [
-                "--in=/home/nicholas/wwwroot/clima/gesto/banche_scheda.asp",
-                "--out=/home/nicholas/Progetti/clima_api/views/html/pages/bancheScheda.templ"
+                "--in=/home/nicholas/Progetti/clima_api/views/public/modules/nav/nav-logo.component.asp",
+                "--out=/home/nicholas/Progetti/clima_api/views/html/components/nav-logo.component.templ"
             ]
         }
     ]
