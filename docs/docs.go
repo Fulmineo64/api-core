@@ -254,7 +254,7 @@ func GetDocs(c *gin.Context, options DocsOptions) OpenAPIV3 {
 	}
 
 	hasSession := request.Session(c) != nil
-	pathParamsReg := regexp.MustCompile(`{(\w+)}`)
+	pathParamsReg := regexp.MustCompile(`:(\w+)`)
 
 	for _, ctrl := range controller.ControllerByName {
 		for _, route := range controller.Routes(ctrl) {
