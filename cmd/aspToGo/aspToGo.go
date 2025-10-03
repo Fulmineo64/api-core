@@ -136,8 +136,8 @@ func replaceASPKeywords(val string) string {
 	// functions and keywords
 	val = regexp.MustCompile(`(?i)writeApplication\("FLAG_([\w_]*?)"\)`).ReplaceAllString(val, "app.Flags.Has(`$1`)")
 	val = regexp.MustCompile(`(?i)Application\("FLAG_([\w_]*?)"\)`).ReplaceAllString(val, "app.Flags.Has(`$1`)")
-	val = regexp.MustCompile(`(?i)writeApplication\("(.*?)"\)`).ReplaceAllString(val, "app.Properties[`$1`]")
-	val = regexp.MustCompile(`(?i)Application\("(.*?)"\)`).ReplaceAllString(val, "app.Properties[`$1`]")
+	val = regexp.MustCompile(`(?i)writeApplication\("(.*?)"\)`).ReplaceAllString(val, "data.Properties.$1")
+	val = regexp.MustCompile(`(?i)Application\("(.*?)"\)`).ReplaceAllString(val, "data.Properties.$1")
 	val = regexp.MustCompile(`(?i)Server.HTMLEncode\(`).ReplaceAllString(val, "html.EscapeString(")
 	val = regexp.MustCompile(`(?i)Session\("(.*?)"\)`).ReplaceAllString(val, "s.GetString(`$1`)")
 
