@@ -13,10 +13,6 @@ func init() {
 // Controller è il cuore della logica di business e del routing, può implementare le seguenti interfaces per estendere ed aggiungere funzionalità
 type Controller struct{}
 
-type Namer interface {
-	Name() string
-}
-
 type Endpointer interface {
 	Endpoint() string
 }

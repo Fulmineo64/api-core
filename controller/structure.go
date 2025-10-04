@@ -252,7 +252,7 @@ func GetRelationInfo(c *gin.Context, rel *schema.Relationship, relations [][]str
 		typ = typ.Elem()
 	}
 
-	ctrl := ControllerByModel[Name(typ)]
+	ctrl := ControllerByModel[utils.Name(typ)]
 	if ctrl != nil {
 		relationInfo.Endpoint = FullPath(ctrl)
 	}

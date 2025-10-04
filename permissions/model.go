@@ -5,6 +5,7 @@ import (
 	"reflect"
 
 	"api_core/message"
+	"api_core/utils"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm/schema"
@@ -33,7 +34,7 @@ func Get(model interface{}) HandlerFunc {
 		return modelPerm.PermissionsGet
 	} else {
 		return func(c *gin.Context) error {
-			return message.Forbidden(c)
+			return message.UnathorizedModel(c, utils.Name(model))
 		}
 	}
 }
@@ -43,7 +44,7 @@ func Post(model interface{}) HandlerFunc {
 		return modelPerm.PermissionsPost
 	} else {
 		return func(c *gin.Context) error {
-			return message.Forbidden(c)
+			return message.UnathorizedModel(c, utils.Name(model))
 		}
 	}
 }
@@ -53,7 +54,7 @@ func Patch(model interface{}) HandlerFunc {
 		return modelPerm.PermissionsPatch
 	} else {
 		return func(c *gin.Context) error {
-			return message.Forbidden(c)
+			return message.UnathorizedModel(c, utils.Name(model))
 		}
 	}
 }
@@ -63,7 +64,7 @@ func Delete(model interface{}) HandlerFunc {
 		return modelPerm.PermissionsDelete
 	} else {
 		return func(c *gin.Context) error {
-			return message.Forbidden(c)
+			return message.UnathorizedModel(c, utils.Name(model))
 		}
 	}
 }

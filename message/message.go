@@ -121,3 +121,10 @@ func FromError(status int, err error) Message {
 		Status:  status,
 	}
 }
+
+func New(status int, text string) Message {
+	return &Msg{
+		Message: text,
+		Status:  status,
+	}
+}

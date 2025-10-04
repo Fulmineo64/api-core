@@ -345,7 +345,7 @@ func Endpoint(controller any) string {
 	if e, ok := controller.(Endpointer); ok {
 		return "/" + e.Endpoint()
 	}
-	return "/" + utils.FirstLower(Name(controller))
+	return "/" + utils.FirstLower(utils.Name(controller))
 }
 
 func Routes(controller any) []Route {

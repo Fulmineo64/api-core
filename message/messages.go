@@ -73,6 +73,13 @@ func UnauthorizedRelations(c *gin.Context, relations ...string) Message {
 	}
 }
 
+func UnathorizedModel(c *gin.Context, model string) Message {
+	return &Msg{
+		Message: GetPrinter(c).Sprintf("Non puoi accedere al modello: %s", model),
+		Status:  http.StatusForbidden,
+	}
+}
+
 // 404
 func ItemNotFound(c *gin.Context) Message {
 	return &Msg{
