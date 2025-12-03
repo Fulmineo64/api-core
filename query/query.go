@@ -112,6 +112,8 @@ func Query(c *gin.Context, db *gorm.DB, args *QueryArgs, config QueryConfig) err
 			}
 		}
 		args.Ord = strings.Join(order, ",")
+	} else if args.Info.Aggregate {
+		args.Info.Order = ""
 	}
 
 	args.Result = []map[string]any{}
