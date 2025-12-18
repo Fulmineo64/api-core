@@ -8,6 +8,5 @@ import (
 )
 
 var Flags = utils.NewKeySet()
-var Properties = map[string]string{}
 var DB *gorm.DB
 var FS *embed.FS
