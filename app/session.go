@@ -90,6 +90,10 @@ func (s *Session) CheckOne(c *gin.Context, permissions ...string) message.Messag
 	return nil
 }
 
+func (s *Session) Exists(key string) bool {
+	return s.Get(key) != nil
+}
+
 // Session providers
 
 type dbSessionProvider struct{}
