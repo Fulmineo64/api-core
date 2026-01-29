@@ -125,6 +125,9 @@ func WriteQueryMapResult(c *gin.Context, args *query.QueryArgs) error {
 							} else if datetime, ok := f.(datatypes.Datetime); ok {
 								if c.GetHeader("Only-Date") == "" {
 									loc, _ := time.LoadLocation(tmz)
+									if loc == nil {
+										loc, _ = time.LoadLocation("Europe/Rome")
+									}
 									row = append(row, time.Time(datetime).In(loc).Format("02/01/2006 15:04"))
 								} else {
 									row = append(row, time.Time(datetime).Format("02/01/2006"))
