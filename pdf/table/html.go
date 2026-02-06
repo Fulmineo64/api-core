@@ -226,35 +226,20 @@ func (t *Table) parseHTMLAttributes(node *html.Node, element *PdfHTMLElement) {
 			styles := strings.Split(attr.Val, ";")
 			for _, s := range styles {
 				pieces := strings.Split(s, ":")
+				if len(pieces) < 2 {
+					continue
+				}
 				val := strings.Join(pieces[1:], ":")
-				switch strings.TrimSpace(pieces[0]) {
+				property := strings.TrimSpace(pieces[0])
+
+				switch property {
 				case "background-color":
-					if strings.HasPrefix(val, "rgb(") {
-						val = val[4 : len(val)-1]
-						rgb := strings.Split(val, ",")
-						element.Style.Fill = &[]int{}
-						for _, color := range rgb {
-							c, err := strconv.Atoi(strings.TrimSpace(color))
-							if err != nil {
-								log.Println("AddHTML: error parsing background color", err)
-								continue
-							}
-							*element.Style.Fill = append(*element.Style.Fill, c)
-						}
+					if color := t.parseCSSColor(val); color != nil {
+						element.Style.Fill = &color
 					}
 				case "color":
-					if strings.HasPrefix(val, "rgb(") {
-						val = val[4 : len(val)-1]
-						rgb := strings.Split(val, ",")
-						element.Style.Color = &[]int{}
-						for _, color := range rgb {
-							c, err := strconv.Atoi(strings.TrimSpace(color))
-							if err != nil {
-								log.Println("AddHTML: error parsing color", err)
-								continue
-							}
-							*element.Style.Color = append(*element.Style.Color, c)
-						}
+					if color := t.parseCSSColor(val); color != nil {
+						element.Style.Color = &color
 					}
 				case "font-weight":
 					switch strings.TrimSpace(val) {
@@ -304,4 +289,45 @@ func (t *Table) parseHTMLAttributes(node *html.Node, element *PdfHTMLElement) {
 			}
 		}
 	}
+}
+
+func (t *Table) parseCSSColor(val string) []int {
+	val = strings.TrimSpace(val)
+
+	// Gestione HEX (#RGB e #RRGGBB)
+	if strings.HasPrefix(val, "#") {
+		hex := val[1:]
+		// Espande la shorthand #RGB in #RRGGBB
+		if len(hex) == 3 {
+			hex = string([]byte{hex[0], hex[0], hex[1], hex[1], hex[2], hex[2]})
+		}
+		if len(hex) == 6 {
+			if v, err := strconv.ParseInt(hex, 16, 64); err == nil {
+				return []int{
+					int(v >> 16),         // Red
+					int((v >> 8) & 0xFF), // Green
+					int(v & 0xFF),        // Blue
+				}
+			}
+		}
+		return nil
+	}
+
+	// Gestione RGB (legacy)
+	if strings.HasPrefix(val, "rgb(") {
+		val = val[4 : len(val)-1]
+		rgbParts := strings.Split(val, ",")
+		var parsed []int
+		for _, color := range rgbParts {
+			c, err := strconv.Atoi(strings.TrimSpace(color))
+			if err != nil {
+				log.Println("AddHTML: error parsing color", err)
+				return nil
+			}
+			parsed = append(parsed, c)
+		}
+		return parsed
+	}
+
+	return nil
 }
