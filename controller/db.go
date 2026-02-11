@@ -104,12 +104,12 @@ func UpdateToDb(c *gin.Context, model interface{}, values any) error {
 	}
 	if tx.Error != nil {
 		tx.Rollback()
-		return err
+		return tx.Error
 	}
 	tx = tx.Model(model).Updates(values)
 	if tx.Error != nil {
 		tx.Rollback()
-		return err
+		return tx.Error
 	} else {
 		tx.Commit()
 	}
