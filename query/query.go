@@ -37,6 +37,7 @@ type QueryArgs struct {
 	Info   ModelInfo
 	Result []map[string]any
 	Count  int64
+	Table  string
 }
 
 type QueryConfig struct {
@@ -148,6 +149,9 @@ func QueryRecursive(c *gin.Context, db *gorm.DB, args *QueryArgs, config QueryCo
 		table := info.Schema.Table
 		if table != info.Table && !strings.Contains(table, ") AS ") {
 			table += " AS " + info.Table
+		}
+		if args.Table != "" {
+			table = args.Table
 		}
 		tx.Table(table)
 	}
