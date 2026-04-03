@@ -150,7 +150,7 @@ func QueryRecursive(c *gin.Context, db *gorm.DB, args *QueryArgs, config QueryCo
 		if table != info.Table && !strings.Contains(table, ") AS ") {
 			table += " AS " + info.Table
 		}
-		if args.Table != "" {
+		if args != nil && args.Table != "" {
 			table = args.Table
 		}
 		tx.Table(table)
