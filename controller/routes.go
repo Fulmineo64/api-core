@@ -188,7 +188,7 @@ func ModelPatchHandler(modelGetter func() any) gin.HandlerFunc {
 
 			modelSliceVal := reflect.ValueOf(mdlSlice).Elem()
 
-			modelSchema, err := schema.Parse(modelSliceVal.Index(0), &sync.Map{}, db.NamingStrategy)
+			modelSchema, err := schema.Parse(modelSliceVal.Index(0).Interface(), &sync.Map{}, db.NamingStrategy)
 			if err != nil {
 				message.InternalServerError(c).Write(c)
 				return
@@ -204,7 +204,7 @@ func ModelPatchHandler(modelGetter func() any) gin.HandlerFunc {
 
 			db.Session(&gorm.Session{FullSaveAssociations: true}).Transaction(func(tx *gorm.DB) error {
 				for i, values := range jsonMaps {
-					modelVal := modelSliceVal.Index(i).Addr()
+					modelVal := modelSliceVal.Index(i)
 					e := DeleteRelations(c, tx, modelVal, modelSchema)
 					if e != nil {
 						return e
