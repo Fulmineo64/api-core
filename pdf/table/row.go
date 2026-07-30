@@ -5,7 +5,17 @@ import (
 	"math"
 	"reflect"
 	"strings"
+	"unicode"
 )
+
+func IsUpper(s string) bool {
+	for _, r := range s {
+		if !unicode.IsUpper(r) && unicode.IsLetter(r) {
+			return false
+		}
+	}
+	return true
+}
 
 type Row struct {
 	table  *Table
@@ -117,7 +127,7 @@ func (r *Row) Add(value any, styles ...*Style) {
 			}
 		}
 
-		for _, line := range lines {
+		for i, line := range lines {
 			strWd := r.table.pdf.GetStringWidth(line)
 			if style.Fill != nil && len(*style.Fill) == 3 {
 				if !style.inline {
@@ -141,7 +151,11 @@ func (r *Row) Add(value any, styles ...*Style) {
 				}
 				r.cells[r.table.columnIndex].endX = r.table.pdf.GetX() + style.PaddingRight
 			} else {
-				r.table.pdf.CellFormat(r.table.ColumnSize(), fontHeight+style.Ln, line, "", 2, style.Align, false, 0, "")
+				h := fontHeight + style.Ln
+				if style.Format == "B" && IsUpper(line) {
+					h += float64(i)
+				}
+				r.table.pdf.CellFormat(r.table.ColumnSize(), h, line, "", 2, style.Align, false, 0, "")
 			}
 			if style.inline {
 				break
