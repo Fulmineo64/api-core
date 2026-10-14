@@ -76,7 +76,7 @@ func CreateToDb(c *gin.Context, db *gorm.DB, model interface{}, args ...string) 
 	return nil
 }
 
-func UpdateToDb(c *gin.Context, model interface{}, values any) error {
+func UpdateToDb(c *gin.Context, model interface{}, values any, args ...string) error {
 	db := request.DB(c).Session(&gorm.Session{CreateBatchSize: 50})
 
 	modelSchema, err := schema.Parse(model, &sync.Map{}, db.NamingStrategy)
@@ -113,7 +113,9 @@ func UpdateToDb(c *gin.Context, model interface{}, values any) error {
 	} else {
 		tx.Commit()
 	}
-	c.JSON(http.StatusOK, model)
+	if len(args) == 0 {
+		c.JSON(http.StatusOK, model)
+	}
 	return nil
 }
 
