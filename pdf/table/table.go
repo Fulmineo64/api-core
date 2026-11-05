@@ -20,6 +20,7 @@ type Table struct {
 	footerFunc     func()
 	onPageBreak    func()
 	afterPageBreak func()
+	IsRound        *bool
 }
 
 // Calls the tableHeader method if exists
@@ -382,6 +383,12 @@ func (t *Table) addHTMLElement(element *PdfHTMLElement) (newPage bool) {
 }
 
 func (t *Table) DrawBorder(borderStr string, x, y, w, h float64) {
+	if t.IsRound != nil && *t.IsRound {
+		// Se la tabella globale richiede bordi arrotondati, usiamo RoundedRect per l'elemento
+		radius := 3.0 // Puoi personalizzare il raggio dell'angolo
+		t.pdf.RoundedRect(x, y, w, h, radius, "1234", "D")
+		return
+	}
 	if borderStr == "1" {
 		borderStr = "TRBL"
 	}
@@ -495,7 +502,35 @@ func (t *Table) ColumnBoundaries(colIndex ...int) (x1 float64, x2 float64) {
 
 // Prints the table
 func (t *Table) Close() *Table {
-	t.row.Draw()
+	// Salviamo la Y iniziale prima del draw dell'ultima riga se serve,
+	// oppure calcoliamo l'altezza complessiva.
+	startY := t.row.startY
+
+	// Se l'indicatore isRound è attivo, disegnamo il bordo arrotondato esterno
+	if t.IsRound != nil && *t.IsRound {
+		endY := t.pdf.GetY() + 1
+		width := t.endX - t.startX
+		height := endY - startY
+
+		// Raggio dell'angolo (es. 4.0 accetta valori float64)
+		radius := 4.0
+
+		// Salviamo lo stile attuale del PDF
+		fRe, fGr, fBl := t.pdf.GetDrawColor()
+
+		// Imposta il colore del bordo (puoi dinamizzarlo prendendolo dallo stile della colonna)
+		// t.pdf.SetDrawColor(180, 180, 180)
+
+		// Disegna il rettangolo con angoli arrotondati.
+		// "D" indica solo il bordo (Draw). Usa "FD" se vuoi anche un colore di sfondo.
+		t.pdf.RoundedRect(t.startX, startY, width, height, radius, "1234", "D")
+
+		// Ripristina il colore originale
+		t.pdf.SetDrawColor(fRe, fGr, fBl)
+	} else {
+		t.row.Draw()
+	}
+
 	return t
 }
 
